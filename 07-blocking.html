@@ -161,7 +161,7 @@ function build(mode){ const cpu=[], wait=[], thread=[];
 (function(){ let sel=0;
   const SIT=[
     {k:'비동기 DB 드라이버 호출',ans:'async def + await',c:'var(--good)',d:'진짜 비동기 라이브러리(asyncpg 등)는 await로 양보해요 — 이상적. 루프가 그 틈에 다른 요청을 처리.'},
-    {k:'동기 DB 드라이버만 있음',ans:'def 핸들러',c:'var(--good)',d:'동기 드라이버(psycopg2 등)를 async def 안에서 부르면 루프가 얼어요. 핸들러를 def로 두면 FastAPI가 스레드풀로 빼줘 안전.'},
+    {k:'동기 DB 드라이버만 있음',ans:'def 핸들러',c:'var(--good)',d:'동기 드라이버(psycopg2 등)를 async def 안에서 부르면 루프가 얼어요. 핸들러를 def로 두면 스레드풀로 빠져 루프는 안 막혀요. 단 동기 드라이버는 스레드를 점유하니, 동시 쿼리가 많으면 스레드풀 한계(기본 ~40)에 걸려요 — 고동시성이면 비동기 드라이버가 정석.'},
     {k:'무거운 CPU 계산(이미지·암호화)',ans:'def + (별도 프로세스)',c:'var(--hot)',d:'CPU 일은 async로도 안 빨라져요(병렬 아님). def로 스레드풀에 빼되, 정말 무거우면 별도 프로세스/작업큐로. async def에 넣으면 루프 정지.'},
     {k:'"async 쓰면 빨라지겠지"',ans:'미신!',c:'var(--drop)',d:'async는 "기다림을 메우는" 도구지 빠름의 동의어가 아니에요. 기다림이 없으면 이득 없고, 블로킹을 async에 넣으면 오히려 최악.'},
   ];

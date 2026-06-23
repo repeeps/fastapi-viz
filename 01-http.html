@@ -138,6 +138,7 @@ const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
     document.getElementById('s1').innerHTML=A.svg(W,H,s,'요청 만들어 보내기');
     document.querySelectorAll('#mtoggle button').forEach(b=>{ const on=b.dataset.m===method; b.classList.toggle('on',on); b.style.background=on?(A.METHODC[method]):'var(--panel-2)'; b.style.color=on?'#0b0e14':'var(--muted)'; });
     hasbody.disabled=!usesBody(); hasbody.parentElement.style.opacity=usesBody()?'1':'0.4';
+    const exUsed = method!=='POST'; exists.disabled=!exUsed; exists.parentElement.style.opacity=exUsed?'1':'0.4'; // POST는 자원 존재 무관
     document.getElementById('lab1').innerHTML = sent? `<b style="color:${A.statusColor(r.c)}">${r.c} ${r.l}</b> — ${r.why}` : '메서드·상황을 정하고 보내보세요.';
   }
   mt.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; method=b.dataset.m; render(false); });

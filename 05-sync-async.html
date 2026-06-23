@@ -152,8 +152,8 @@ const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
     // 한 요청 구성 막대
     s+=`<text x="20" y="124" fill="var(--muted)" font-size="10" font-family="monospace">한 요청:</text>`;
     s+=`<rect x="80" y="112" width="${(work*(W-110)).toFixed(0)}" height="18" rx="3" fill="var(--good)"/>`;
-    s+=`<rect x="${80+work*(W-110)}" y="112" width="${(io*(W-110)).toFixed(0)}" height="18" rx="3" fill="url(#apihatch)" stroke="var(--slate)" stroke-dasharray="3 2"/>`;
-    s+=`<defs><pattern id="apihatch" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="6" stroke="var(--slate)" stroke-width="2" opacity="0.5"/></pattern></defs>`;
+    s+=`<defs><pattern id="apihatch2" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="6" stroke="var(--slate)" stroke-width="2" opacity="0.5"/></pattern></defs>`;
+    s+=`<rect x="${80+work*(W-110)}" y="112" width="${(io*(W-110)).toFixed(0)}" height="18" rx="3" fill="url(#apihatch2)" stroke="var(--slate)" stroke-dasharray="3 2"/>`;
     s+=`<text x="${W/2}" y="152" fill="${speedup>1.6?'var(--good)':speedup>1.15?'var(--hot)':'var(--drop)'}" font-size="12" font-family="monospace" text-anchor="middle" font-weight="700">속도 향상 ×${speedup.toFixed(1)}</text>`;
     document.getElementById('s2').innerHTML=A.svg(W,H,s,'async 이득');
     document.getElementById('lab2').innerHTML = io>=0.7?'<b style="color:var(--good)">기다림이 많아요</b> — async가 그 틈을 메워 크게 이득(웹 서버의 전형).': io<=0.2?'<b style="color:var(--drop)">CPU 일만 가득</b> — 양보할 틈이 없어 async가 거의 무의미.':'기다림이 적당 — async 이득도 적당해요.';

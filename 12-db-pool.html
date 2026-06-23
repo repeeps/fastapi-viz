@@ -65,7 +65,7 @@
     <div class="ctl"><button class="btn play" id="go2">▶ 한 요청</button> <button class="btn" id="rst2">↺ 리셋</button></div>
     <div class="scene" id="s2"></div>
     <p class="big" id="lab2"></p>
-    <p class="note" style="margin-top:6px">→ 그래서 "요청 수 = 연결 수"가 아니에요. 풀을 압박하는 건 <b>같은 순간에 쿼리 중인 요청 수</b>예요.</p>
+    <p class="note" style="margin-top:6px">→ 그래서 "요청 수 = 연결 수"가 아니에요. 풀을 압박하는 건 <b>같은 순간에 쿼리 중인 요청 수</b>예요. (단 <b>트랜잭션을 길게 열어두면</b> 그동안 연결을 계속 붙잡아요 — 그래서 트랜잭션도 짧게.)</p>
   </section>
 
   <!-- STEP 3 -->
@@ -90,10 +90,10 @@ const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
 
 // ===== STEP 0: borrow & return =====
 (function(){ const W=460,H=200; let cancel=null; const SIZE=4;
-  function render(p){ let s=''; // 3요청이 빌리고 반납 (구간 겹쳐 여러 슬롯 동시 점유)
-    // 각 요청 i: 빌림 i*0.18, 점유 0.34 (겹침), 반납
+  function render(p){ let s=''; // 3요청이 빌리고 반납 (구간 크게 겹쳐 슬롯 3개까지 동시 점유)
+    // 각 요청 i: 빌림 i*0.18, 점유 0.5 (겹침), 반납
     let inUse=0; const reqState=[];
-    for(let i=0;i<3;i++){ const start=i*0.18; const using = p>=start && p<start+0.34; if(using) inUse++; reqState.push(using?'쿼리 중(빌림)': p>=start+0.34?'반납함':'대기'); }
+    for(let i=0;i<3;i++){ const start=i*0.18; const using = p>=start && p<start+0.5; if(using) inUse++; reqState.push(using?'쿼리 중(빌림)': p>=start+0.5?'반납함':'대기'); }
     s+=`<text x="${W/2}" y="28" fill="var(--muted)" font-size="11" font-family="monospace" text-anchor="middle">커넥션 풀 (크기 ${SIZE})</text>`;
     s+=A.pool(W/2-((30+5)*SIZE)/2, 40, SIZE, inUse, {});
     // 요청들

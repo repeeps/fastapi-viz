@@ -122,7 +122,7 @@ const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
     if(now>=closeEnd) s+=`<text x="${W-14}" y="13" fill="var(--good)" font-size="10.5" font-family="monospace" text-anchor="end">✓ 세션 닫힘 (${fail?'에러였지만':'정상'})</text>`;
     document.getElementById('s1').innerHTML=A.svg(W,H,s,fail?'에러 케이스':'성공 케이스');
     document.querySelectorAll('#rt button').forEach(b=>{ const on=(b.dataset.f==='1')===fail; b.classList.toggle('on',on); b.style.background=on?(fail?'var(--drop)':'var(--good)'):'var(--panel-2)'; b.style.color=on?(fail?'#fff':'#0b0e14'):'var(--muted)'; });
-    document.getElementById('lab1').innerHTML = fail? (now<cleanupT0?'핸들러가 <b style="color:var(--drop)">에러로 터졌어요</b> 💥 — 하지만…': '터졌어도 <b style="color:var(--v)">② 세션 닫기는 실행됐어요</b>. 정리 보장(finally처럼)!') : (now<closeEnd?'핸들러 정상 진행 중…':'정상 종료 → 세션 닫힘. 성공이든 에러든 <b>닫기는 항상</b>.');
+    document.getElementById('lab1').innerHTML = fail? (now<cleanupT0?'핸들러가 <b style="color:var(--drop)">에러로 터졌어요</b> 💥 — 하지만…': '터졌어도 <b style="color:var(--v)">② 세션 닫기는 실행됐어요</b>. 정리 보장! (요청 자체는 에러 응답으로 끝나지만, <b>자원은 새지 않게 정리</b>돼요)') : (now<closeEnd?'핸들러 정상 진행 중…':'정상 종료 → 세션 닫힘. 성공이든 에러든 <b>닫기는 항상</b>.');
   }
   rt.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; fail=b.dataset.f==='1'; if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),2800,()=>render(1)); });
   render(0);
@@ -133,13 +133,13 @@ const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
   function render(p){ const now=p*tmax; let s='';
     // 두 요청 각자 세션 열고닫기
     const tasks=[
-      {lane:'요청 A',t0:0.0,dur:0.15,label:'열기',kind:'run',color:'var(--v)'},{lane:'요청 A',t0:0.15,dur:0.6,label:'A 처리',kind:'run',color:'var(--q)'},{lane:'요청 A',t0:0.75,dur:0.15,label:'닫기',kind:'run',color:'var(--v)'},
-      {lane:'요청 B',t0:0.5,dur:0.15,label:'열기',kind:'run',color:'var(--v)'},{lane:'요청 B',t0:0.65,dur:0.6,label:'B 처리',kind:'run',color:'var(--pink)'},{lane:'요청 B',t0:1.25,dur:0.15,label:'닫기',kind:'run',color:'var(--v)'},
+      {lane:'요청 A',t0:0.0,dur:0.15,label:'열기',kind:'run',color:'var(--v)'},{lane:'요청 A',t0:0.15,dur:0.5,label:'A 처리',kind:'run',color:'var(--q)'},{lane:'요청 A',t0:0.65,dur:0.12,label:'응답',kind:'run',color:'var(--good)'},{lane:'요청 A',t0:0.79,dur:0.15,label:'닫기',kind:'run',color:'var(--v)'},
+      {lane:'요청 B',t0:0.55,dur:0.15,label:'열기',kind:'run',color:'var(--v)'},{lane:'요청 B',t0:0.7,dur:0.5,label:'B 처리',kind:'run',color:'var(--pink)'},{lane:'요청 B',t0:1.2,dur:0.12,label:'응답',kind:'run',color:'var(--good)'},{lane:'요청 B',t0:1.34,dur:0.15,label:'닫기',kind:'run',color:'var(--v)'},
     ];
     const vis=tasks.filter(t=>t.t0<now+0.001).map(t=>({...t,dur:Math.max(0,Math.min(t.dur,now-t.t0))}));
     s=A.loop(W,H,['요청 A','요청 B'],vis,tmax,{playhead:now,tick:0.5,padL:70});
     document.getElementById('s2').innerHTML=A.svg(W,H,s,'요청에 묶인 수명');
-    document.getElementById('lab2').innerHTML = now<0.5?'요청 A가 <b>자기 세션</b>을 열어 일하고 닫아요.': '요청 A·B가 <b>각자 독립된 세션</b>을 열고 닫아요 — 동시에 와도 안 섞여요. 세션 수명 = 요청 수명.';
+    document.getElementById('lab2').innerHTML = now<0.5?'요청 A가 <b>자기 세션</b>을 열어 일하고, <b style="color:var(--good)">응답을 보낸 뒤</b> 닫아요(정리는 응답 다음).': '요청 A·B가 <b>각자 독립된 세션</b>을 열고 닫아요 — 동시에 와도 안 섞여요. 닫기는 <b>응답 후</b>. 세션 수명 = 요청 수명.';
   }
   document.getElementById('go2').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),3000,()=>render(1)); };
   document.getElementById('rst2').onclick=()=>{ if(cancel)cancel(); render(0); };

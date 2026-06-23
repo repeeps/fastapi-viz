@@ -95,12 +95,11 @@ const LAYERS=[{label:'CORS',color:'var(--q)'},{label:'로깅',color:'var(--pink)
     else { activeIdx=LAYERS.length-Math.floor((p-0.5)/0.5*(LAYERS.length+1)); dir=-1; }
     activeIdx=clamp(activeIdx,0,LAYERS.length);
     const ai = activeIdx>=LAYERS.length? -1 : activeIdx; // 핸들러면 -1
-    s+=A.onion(cx,cy,LAYERS,{activeIdx:(p>=0.45&&p<=0.55)?-1:ai,step:30,core:'핸들러'});
+    s+=A.onion(cx,cy,LAYERS,{activeIdx:ai,step:30,core:'핸들러'});  // 강조를 ai에 직결(핸들러 구간 일치)
     // 진행 표시
-    s+=`<text x="${cx}" y="200" fill="var(--muted)" font-size="10" font-family="monospace" text-anchor="middle">${p<0.5?'요청: 바깥 → 안 ▶':'응답: 안 → 바깥 ◀'}</text>`;
+    s+=`<text x="${cx}" y="200" fill="var(--muted)" font-size="10" font-family="monospace" text-anchor="middle">${ai===-1?'핸들러(가장 안쪽)':p<0.5?'요청: 바깥 → 안 ▶':'응답: 안 → 바깥 ◀'}</text>`;
     document.getElementById('s0').innerHTML=A.svg(W,H,s,'양파 껍질');
-    const outIdx = clamp(activeIdx>=LAYERS.length?LAYERS.length-1:activeIdx,0,LAYERS.length-1);
-    document.getElementById('lab0').innerHTML = p<0.02?'▶로 통과시키세요.': (p>=0.45&&p<=0.55)?'<b style="color:var(--good)">핸들러</b> 도착(가장 안쪽)! 이제 응답이 거꾸로 나가요.': p<0.5?`요청이 <b>${LAYERS[clamp(ai,0,2)].label}</b> 껍질을 통과 중(바깥→안).`:`응답이 <b>${LAYERS[outIdx].label}</b> 껍질을 통과 중(안→바깥, 역순).`;
+    document.getElementById('lab0').innerHTML = p<0.02?'▶로 통과시키세요.': ai===-1?'<b style="color:var(--good)">핸들러</b> 도착(가장 안쪽)! 이제 응답이 거꾸로 나가요.': p<0.5?`요청이 <b>${LAYERS[ai].label}</b> 껍질을 통과 중(바깥→안).`:`응답이 <b>${LAYERS[ai].label}</b> 껍질을 통과 중(안→바깥, 역순).`;
   }
   document.getElementById('go0').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),3200,()=>render(1)); };
   document.getElementById('rst0').onclick=()=>{ if(cancel)cancel(); render(0); };

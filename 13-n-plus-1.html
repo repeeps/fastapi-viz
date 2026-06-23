@@ -121,7 +121,7 @@ const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
     s+=`<text x="20" y="86" fill="var(--good)" font-size="11" font-family="monospace">몰아서</text>`;
     s+=`<rect x="120" y="74" width="${Math.max(4,batch/maxQ*(W-160)).toFixed(0)}" height="22" rx="4" fill="var(--good)" opacity="0.9"/>`;
     s+=`<text x="${120+Math.max(4,batch/maxQ*(W-160))+8}" y="89" fill="var(--ink)" font-size="11" font-family="monospace">2번 (고정)</text>`;
-    s+=`<text x="${W/2}" y="134" fill="${naive>20?'var(--drop)':'var(--hot)'}" font-size="13" font-family="monospace" text-anchor="middle" font-weight="700">N=${n} → 순진 ${naive}번 vs 몰아서 2번 (${(naive/batch).toFixed(0)}배 차이)</text>`;
+    s+=`<text x="${W/2}" y="134" fill="${naive>20?'var(--drop)':'var(--hot)'}" font-size="13" font-family="monospace" text-anchor="middle" font-weight="700">N=${n} → 순진 ${naive}번 vs 몰아서 2번 (쿼리 ${(naive/batch).toFixed(0)}배)</text>`;
     document.getElementById('s1').innerHTML=A.svg(W,H,s,'N 증가');
     document.getElementById('lab1').innerHTML = n<=5?`N이 작아(${n}) 차이가 작아 보여요 — 그래서 개발 땐 못 느끼다 운영서 터져요.`:`N=${n}: 순진 방식은 <b style="color:var(--drop)">${naive}번</b>, 몰아서는 <b style="color:var(--good)">2번</b>. N이 클수록 격차가 벌어져요.`;
   }

@@ -37,7 +37,7 @@
   <section class="panel show" data-panel="0">
     <span class="kicker" style="color:var(--hot)">Step 00 — The Dependency Tree</span>
     <h2>의존성의 의존성 — 잎부터 푼다</h2>
-    <p class="lead">핸들러가 <b>현재 사용자</b>를 필요로 하는데, 그걸 알려면 <b>토큰</b>이, 토큰을 읽으려면 <b>요청</b>이 필요해요 — 나무가 생겼죠. ▶를 누르면 FastAPI가 <b>가장 안쪽(요청)부터</b> 하나씩 풀어, 그 결과를 위로 전달하며 올라가요. 마지막에 핸들러가 "현재 사용자"를 손에 쥐고 실행되죠.</p>
+    <p class="lead">핸들러가 <b>현재 사용자</b>를 필요로 하는데, 그걸 알려면 <b>토큰</b>이, 토큰을 읽으려면 <b>요청</b>이 필요해요 — 의존성이 줄줄이 이어지죠. ▶를 누르면 FastAPI가 <b>가장 안쪽(요청)부터</b> 하나씩 풀어, 그 결과를 위로 전달하며 올라가요. 마지막에 핸들러가 "현재 사용자"를 손에 쥐고 실행되죠. (여기선 한 줄기지만, 가지가 갈라지면 진짜 <b>나무</b>가 돼요 — 다음 스텝에서.)</p>
     <div class="ctl"><button class="btn play" id="go0">▶ 나무 풀기</button> <button class="btn" id="rst0">↺ 리셋</button></div>
     <div class="scene" id="s0"></div>
     <p class="big" id="lab0"></p>

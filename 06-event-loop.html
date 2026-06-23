@@ -48,7 +48,7 @@
   <section class="panel" data-panel="1">
     <span class="kicker" style="color:var(--q)">Step 01 — Only One Runs at a Time</span>
     <h2>한 번에 실행되는 건 딱 하나</h2>
-    <p class="lead">3개 요청을 처리하는 타임라인이에요. ▶로 재생하며 <b>세로 재생선</b>이 지나는 순간을 보세요 — <b>꽉 찬 막대(실행)는 어느 순간에도 하나뿐</b>이고, <b>빗금 막대(기다림)는 여러 개가 겹쳐요</b>. 위 카운터가 "지금 실행 중 = 1, 기다리는 중 = N"을 알려줘요. 이게 "한 일꾼이 번갈아 한다"의 진짜 모습이에요.</p>
+    <p class="lead">3개 요청을 처리하는 타임라인이에요. <b>맨 윗줄</b>은 유일한 일꾼(이벤트 루프=CPU), <b>아래 R1·R2·R3 줄</b>은 각 요청이 "기다리는 중"임을 보여줘요(같은 요청이 실행될 땐 윗줄로 올라와요). ▶로 재생하며 <b>세로 재생선</b>이 지나는 순간을 보세요 — <b>꽉 찬 막대(실행)는 어느 순간에도 하나뿐</b>이고, <b>빗금 막대(기다림)는 여러 개가 겹쳐요</b>. 위 카운터가 "실행 중 = 0/1, 기다리는 중 = N"을 알려줘요.</p>
     <div class="ctl"><button class="btn play" id="go1">▶ 재생</button> <button class="btn" id="rst1">↺ 리셋</button></div>
     <div class="scene" id="s1"></div>
     <p class="big" id="lab1"></p>

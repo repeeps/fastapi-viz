@@ -52,7 +52,7 @@
   <section class="panel" data-panel="1">
     <span class="kicker" style="color:var(--q)">Step 01 — Workers vs Async</span>
     <h2>무엇을 늘려야 하나 — 일의 성격에 따라</h2>
-    <p class="lead">일의 성격(기다림 위주 vs CPU 위주)을 바꿔보세요. <b>I/O 위주</b>(DB·API 대기): 한 워커의 async만으로도 충분 — 워커를 늘려도 큰 이득 없어요. <b>CPU 위주</b>(계산·이미지 처리): 한 루프로는 안 빨라지니(병렬 아님) <b>워커(프로세스)를 코어 수만큼</b> 늘려야 진짜 동시에 계산해요. async는 기다림을, 워커는 계산을 — 서로 다른 손잡이예요.</p>
+    <p class="lead">일의 성격(기다림 위주 vs CPU 위주)을 바꿔보세요. <b>I/O 위주</b>(DB·API 대기): 한 워커의 async가 기다림을 메워 많은 요청을 받아내요(단 여러 코어를 다 쓰려면 I/O 앱도 워커를 코어 수만큼 — async는 "각 워커 안"의 동시성). <b>CPU 위주</b>(계산·이미지 처리): 한 루프로는 안 빨라지니(병렬 아님) <b>워커(프로세스)를 코어 수만큼</b> 늘려야 진짜 동시에 계산해요(가속은 이상적일 때 ×워커수, 실제론 오버헤드로 그보다 덜). async는 기다림을, 워커는 계산을 — 서로 다른 손잡이예요.</p>
     <div class="toggles" id="wk"></div>
     <div class="scene" id="s1"></div>
     <p class="big" id="lab1"></p>

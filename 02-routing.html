@@ -23,7 +23,7 @@
   <header>
     <div class="tag" style="color:var(--q)">PART A · 요청의 여정 — CH 02</div>
     <h1>라우팅</h1>
-    <p class="intro">서버엔 핸들러(요청을 처리하는 함수)가 여러 개예요. 요청이 들어오면 그 <b>메서드+경로</b>를 보고 <b>어느 핸들러로 보낼지</b> 골라야 하는데, 이게 <b>라우팅</b>이에요. 경로엔 두 종류의 변수가 박힐 수 있어요 — <b>경로 파라미터</b>(<code>/users/{id}</code>의 id처럼 경로 일부)와 <b>쿼리 파라미터</b>(<code>?limit=10</code>처럼 ? 뒤). 라우터는 들어온 URL을 등록된 경로 틀에 맞춰보고, 맞으면 그 변수들을 <b>뽑아서</b> 핸들러에 넘겨요. 함정은 <b>매칭 순서</b>예요 — 여러 틀이 겹치면 <b>구체적인 것을 먼저</b> 둬야 엉뚱한 데로 안 빠져요.</p>
+    <p class="intro">서버엔 핸들러(요청을 처리하는 함수)가 여러 개예요. 요청이 들어오면 그 <b>메서드+경로</b>를 보고 <b>어느 핸들러로 보낼지</b> 골라야 하는데, 이게 <b>라우팅</b>이에요. 경로엔 두 종류의 변수가 박힐 수 있어요 — <b>경로 파라미터</b>(<code>/users/{id}</code>의 id처럼 경로 일부)와 <b>쿼리 파라미터</b>(<code>?limit=10</code>처럼 ? 뒤). 라우터는 들어온 URL을 등록된 경로 틀에 맞춰보고, 맞으면 그 변수들을 <b>뽑아서</b> 핸들러에 넘겨요. 함정은 <b>매칭 순서</b>예요 — FastAPI는 <b>등록한 순서대로</b> 위에서부터 첫 일치를 쓰니, 여러 틀이 겹치면 <b>구체적인 것을 더 위에(먼저) 등록</b>해야 엉뚱한 데로 안 빠져요(프레임워크가 구체성을 자동 판단해주지 않아요).</p>
   </header>
 
   <nav class="stepper" id="stepper">
@@ -103,7 +103,7 @@ const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
     if(p>=0.85) s+=`<text x="${W/2}" y="212" fill="var(--good)" font-size="11" font-family="monospace" text-anchor="middle">→ 핸들러 호출, id="1" 전달</text>`;
     document.getElementById('s0').innerHTML=A.svg(W,H,s,'라우트 매칭');
     const step=Math.min(target, Math.floor(clamp((p-0.1)/0.25,0,3)));
-    document.getElementById('lab0').innerHTML = p<0.1?'▶로 길찾기를 시작하세요.': p<0.85?`등록 순서대로 틀에 맞춰보는 중… <code>${routes[step].p}</code> 확인`:'<code>/users/{id}</code>에 <b style="color:var(--good)">일치</b> — id=1을 뽑아 그 핸들러로!';
+    document.getElementById('lab0').innerHTML = p<0.1?'▶로 길찾기를 시작하세요.': p<0.6?`등록 순서대로 틀에 맞춰보는 중… <code>${routes[step].p}</code> 확인`:'<code>/users/{id}</code>에 <b style="color:var(--good)">일치</b> — id=1을 뽑아 그 핸들러로!';
   }
   document.getElementById('go0').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),2600,()=>render(1)); };
   document.getElementById('rst0').onclick=()=>{ if(cancel)cancel(); render(0); };

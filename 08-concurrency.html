@@ -54,7 +54,7 @@
       <label>기다림 비율 <span id="ioL" style="color:var(--hot)">90%</span></label><input type="range" id="iov" min="0" max="100" step="5" value="90" style="flex:1"></div>
     <div class="scene" id="s1"></div>
     <p class="big" id="lab1"></p>
-    <p class="note" style="margin-top:6px">→ "동시 요청 한계"는 결국 <b>CPU 점유율</b> 문제예요 — 기다림이 많으면 한 루프로 충분, CPU 바운드면 워커를 늘려야(→ CH 16).</p>
+    <p class="note" style="margin-top:6px">→ 위 막대는 <b>대략적인 상대값</b>이에요(실제 수치 아님). 한계는 CPU만이 아니라 <b>DB 커넥션 풀·메모리·소켓</b> 같은 다른 자원이 먼저 걸리기도 해요 — CPU 바운드면 워커를 늘려야(→ CH 16).</p>
   </section>
 
   <!-- STEP 2 -->
@@ -134,11 +134,11 @@ const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
   const bg=document.getElementById('bg'); bg.innerHTML=MODES.map((m,i)=>`<button data-i="${i}">${m.k}</button>`).join('');
   function render(p){ const H=170; const tmax=2.0; const now=p*tmax;
     const bgDur = mode===0?0.3:1.2;
-    const lanes=['이벤트 루프','백그라운드(같은 서버)'];
+    const lanes=['이벤트 루프','백그라운드(같은 프로세스)'];
     const tasks=[
       {lane:'이벤트 루프',t0:0,dur:0.2,label:'핸들러',kind:'run',color:'var(--good)'},
-      // 응답은 0.2에 나가고, 백그라운드 작업은 같은 서버의 백그라운드 레인에서 (병렬 일꾼 아님)
-      {lane:'백그라운드(같은 서버)',t0:0.2,dur:bgDur,label:mode===0?'메일 작업':'영상 변환(무거움)',kind:'run',color:mode===0?'var(--v)':'var(--hot)'},
+      // 응답 후 백그라운드 작업(같은 프로세스의 스레드풀/루프). 별도 병렬 머신이 아니라 같은 서버 자원을 씀
+      {lane:'백그라운드(같은 프로세스)',t0:0.2,dur:bgDur,label:mode===0?'메일 작업':'영상 변환(무거움)',kind:'run',color:mode===0?'var(--v)':'var(--hot)'},
     ];
     // 다른 요청 R2가 0.3에 도착. 무거우면 같은 서버 자원을 두고 경합 → 밀림
     if(mode===0){ tasks.push({lane:'이벤트 루프',t0:0.3,dur:0.2,label:'R2',kind:'run',color:'var(--q)'}); }
