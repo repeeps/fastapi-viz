@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>11 · yield 생명주기 — FastAPI, 눈으로 보기</title>
+<link rel="stylesheet" href="shared/theme.css">
+<link rel="icon" type="image/svg+xml" href="shared/favicon.svg">
+<style>
+  .scene{cursor:default;}
+  .big{font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--ink); margin:8px 2px 0;}
+  .ctl{display:flex; align-items:center; gap:10px; margin:10px 0; flex-wrap:wrap;}
+  svg{display:block; width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:12px;}
+  .toggles{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .toggles button{font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);cursor:pointer}
+  .toggles button.on{color:#0b0e14;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topnav" id="topnav"></div>
+
+  <header>
+    <div class="tag" style="color:var(--hot)">PART D · 의존성 주입 — CH 11</div>
+    <h1>yield 생명주기</h1>
+    <p class="intro">DB 세션(여기서 "세션"은 <b>DB 세션</b>이지 로그인 세션이 아니에요)처럼 <b>열었으면 반드시 닫아야</b> 하는 자원이 있어요. 안 닫으면 연결이 줄줄 새다 결국 고갈되죠(다음 챕터). 그래서 의존성엔 특별한 형태가 있어요 — <b>yield 의존성</b>. 한 함수 안에 <b>세 구간</b>이 담겨요: <b>① 셋업</b>(세션 열기) → <code>yield</code>로 그 자원을 핸들러에 <b>넘겨주고</b> → 핸들러가 다 쓴 뒤 <b>② 정리</b>(세션 닫기)가 돌아요. 즉 <code>yield</code> <b>앞은 시작 전, 뒤는 끝난 후</b>예요. 핵심은 <b>정리가 보장된다</b>는 것 — 핸들러가 <b>에러로 터져도</b> 정리 구간은 <b>반드시</b> 실행돼요(try/finally처럼). 그리고 이 생명주기는 <b>요청 하나에 딱 묶여요</b> — 요청 시작 때 열고, 요청 끝에 닫죠. (이 세션 뒤에 있는 "연결 풀"의 이야기는 다음 챕터에서.)</p>
+  </header>
+
+  <nav class="stepper" id="stepper">
+    <button data-s="0" class="active">00 · 셋업·정리</button>
+    <button data-s="1">01 · 터져도 정리된다</button>
+    <button data-s="2">02 · 요청에 묶인 수명</button>
+    <button data-s="3">03 · 정리</button>
+  </nav>
+
+  <!-- STEP 0 -->
+  <section class="panel show" data-panel="0">
+    <span class="kicker" style="color:var(--hot)">Step 00 — Setup · Cleanup</span>
+    <h2>yield 앞은 시작 전, 뒤는 끝난 후</h2>
+    <p class="lead">▶를 누르면 한 요청의 <b>세션 생명주기</b>가 흘러요 — <b>① 세션 열기</b>(yield 앞) → <code>yield</code>로 핸들러에 넘김 → <b>핸들러가 세션으로 일</b> → 끝나면 <b>② 세션 닫기</b>(yield 뒤). 한 함수 안에 "전"과 "후"가 같이 들어 있는 게 yield 의존성의 모양이에요.</p>
+    <div class="ctl"><button class="btn play" id="go0">▶ 생명주기 재생</button> <button class="btn" id="rst0">↺ 리셋</button></div>
+    <div class="scene" id="s0"></div>
+    <p class="big" id="lab0"></p>
+    <p class="note" style="margin-top:6px">→ <code>yield</code>는 "여기서 핸들러에게 넘기고, 핸들러가 끝나면 이 줄 다음부터 이어서 정리해"라는 표식이에요.</p>
+  </section>
+
+  <!-- STEP 1 -->
+  <section class="panel" data-panel="1">
+    <span class="kicker" style="color:var(--q)">Step 01 — Cleanup Always Runs</span>
+    <h2>핸들러가 터져도 — 정리는 반드시</h2>
+    <p class="lead">핸들러가 <b>성공</b>하든 <b>에러로 터지든</b> 토글해 보세요. 어느 쪽이든 <b>정리(세션 닫기)는 반드시 실행</b>돼요 — try/finally의 finally처럼요. 그래서 에러가 나도 연결이 새지 않아요. 만약 정리가 보장되지 않았다면, 에러 한 번에 연결 하나가 영영 안 닫혀 쌓이다 풀이 고갈됐겠죠.</p>
+    <div class="toggles" id="rt"></div>
+    <div class="scene" id="s1"></div>
+    <p class="big" id="lab1"></p>
+    <p class="note" style="margin-top:6px">→ "열었으면 닫는다"를 사람이 매번 기억할 필요 없이 <b>구조가 보장</b>해줘요 — yield 의존성의 가장 큰 가치.</p>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="panel" data-panel="2">
+    <span class="kicker" style="color:var(--v)">Step 02 — Lifetime = One Request</span>
+    <h2>수명은 요청 하나에 딱 묶인다</h2>
+    <p class="lead">세션의 수명은 <b>요청 하나</b>와 정확히 같아요 — 요청이 시작되면 열리고, <b>응답을 보낸 뒤</b> 닫혀요(정리는 응답 전송 다음에). ▶로 두 요청을 흘려보세요. 각 요청이 <b>자기만의 세션</b>을 열고 닫죠(서로 안 섞임). 그래서 요청들이 동시에 와도 각자 독립된 세션을 가져요. 그런데 이 세션들은 어디서 연결을 가져올까요? 바로 뒤에 <b>커넥션 풀</b>이 있어요 — 다음 챕터의 주인공이에요.</p>
+    <div class="ctl"><button class="btn play" id="go2">▶ 두 요청</button> <button class="btn" id="rst2">↺ 리셋</button></div>
+    <div class="scene" id="s2"></div>
+    <p class="big" id="lab2"></p>
+    <p class="note" style="margin-top:6px">→ 이 챕터는 "세션을 <b>언제 열고 닫나</b>"(생명주기). 그 세션이 <b>연결을 어디서 빌리나</b>(풀)는 → <a href="12-db-pool.html" style="color:var(--q)">CH 12</a>. 역할이 나뉘어요.</p>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="panel" data-panel="3">
+    <span class="kicker" style="color:var(--good)">Step 03 — Takeaways</span>
+    <h2>정리 — PART D를 닫으며</h2>
+    <p class="lead">의존성 주입은 <b>선언하면 채워주고</b>(09), <b>나무를 안쪽부터 풀며 한 요청엔 한 번만</b>(10), <b>yield로 셋업·정리를 묶어 정리를 보장</b>(11)해요. 핸들러는 깨끗한 준비물을 갖춘 채 자기 일에만 집중하죠. 이제 그 세션 뒤의 세계로 — 한정된 <b>연결을 빌려 쓰는 커넥션 풀</b>, 그게 고갈되면 무슨 일이 나는지로 들어가요.</p>
+    <div class="scene" id="s3"></div>
+    <p class="big" id="lab3"></p>
+    <p class="note" style="margin-top:14px">→ 다음 → <a href="12-db-pool.html" style="color:var(--q);font-weight:700">CH 12 · DB 세션·커넥션 풀</a></p>
+  </section>
+
+  <p class="foot">// 코드 없는 직관 입문 · <a href="index.html">목차</a></p>
+</div>
+
+<script src="shared/lib.js"></script>
+<script src="shared/lib-api.js"></script>
+<script>
+VZ.mountTopnav('#topnav', '11 · yield');
+VZ.setupStepper();
+const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
+
+// ===== STEP 0: setup → yield → cleanup =====
+(function(){ const W=460,H=200; let cancel=null; const tmax=1.4;
+  function render(p){ const now=p*tmax; let s='';
+    const tasks=[{lane:'get_db (yield 의존성)',t0:0,dur:0.2,label:'① 세션 열기',kind:'run',color:'var(--v)'},
+      {lane:'핸들러',t0:0.25,dur:0.8,label:'세션으로 일',kind:'run',color:'var(--good)'},
+      {lane:'get_db (yield 의존성)',t0:1.1,dur:0.2,label:'② 세션 닫기',kind:'run',color:'var(--v)'}];
+    const vis=tasks.filter(t=>t.t0<now+0.001).map(t=>({...t,dur:Math.max(0,Math.min(t.dur,now-t.t0))}));
+    s=A.loop(W,H,['get_db (yield 의존성)','핸들러'],vis,tmax,{playhead:now,tick:0.35,padL:110});
+    // yield 표식
+    const yieldX = 110 + (0.22/tmax)*(W-110-14);
+    if(now>=0.2) s+=`<text x="${yieldX}" y="${H-4}" fill="var(--hot)" font-size="9" font-family="monospace" text-anchor="middle">↑ yield (넘김)</text>`;
+    document.getElementById('s0').innerHTML=A.svg(W,H,s,'yield 생명주기');
+    document.getElementById('lab0').innerHTML = now<0.2?'<b style="color:var(--v)">① 세션 열기</b> — yield 앞(시작 전).': now<1.1?'<code>yield</code>로 세션을 핸들러에 넘김 → <b style="color:var(--good)">핸들러가 일하는 중</b>.':'핸들러 끝 → <b style="color:var(--v)">② 세션 닫기</b>(yield 뒤). 열고 닫기 완료.';
+  }
+  document.getElementById('go0').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),2800,()=>render(1)); };
+  document.getElementById('rst0').onclick=()=>{ if(cancel)cancel(); render(0); };
+  render(0);
+})();
+
+// ===== STEP 1: cleanup always runs =====
+(function(){ const W=460,H=200; let fail=false, cancel=null; const tmax=1.4;
+  const rt=document.getElementById('rt'); rt.innerHTML=`<button data-f="0">핸들러 성공</button><button data-f="1">핸들러 에러</button>`;
+  function render(p){ const now=p*tmax; let s='';
+    const errAt=0.7;
+    const handlerDur = fail? (errAt-0.25) : 0.8;
+    const cleanupT0 = 0.25+handlerDur+0.08;  // 핸들러 종료 직후 곧바로 정리
+    const tasks=[{lane:'get_db',t0:0,dur:0.2,label:'① 열기',kind:'run',color:'var(--v)'},
+      {lane:'핸들러',t0:0.25,dur:handlerDur,label:fail?'일하다 💥에러':'세션으로 일',kind:fail?'block':'run',color:fail?undefined:'var(--good)'},
+      {lane:'get_db',t0:cleanupT0,dur:0.2,label:'② 닫기(보장)',kind:'run',color:'var(--v)'}];
+    const vis=tasks.filter(t=>t.t0<now+0.001).map(t=>({...t,dur:Math.max(0,Math.min(t.dur,now-t.t0))}));
+    s=A.loop(W,H,['get_db','핸들러'],vis,tmax,{playhead:now,tick:0.35,padL:70});
+    const closeEnd=cleanupT0+0.2;
+    if(fail && now>=errAt && now<cleanupT0) s+=`<text x="${W-14}" y="13" fill="var(--drop)" font-size="10.5" font-family="monospace" text-anchor="end">에러 발생 — 곧바로 정리로</text>`;
+    if(now>=closeEnd) s+=`<text x="${W-14}" y="13" fill="var(--good)" font-size="10.5" font-family="monospace" text-anchor="end">✓ 세션 닫힘 (${fail?'에러였지만':'정상'})</text>`;
+    document.getElementById('s1').innerHTML=A.svg(W,H,s,fail?'에러 케이스':'성공 케이스');
+    document.querySelectorAll('#rt button').forEach(b=>{ const on=(b.dataset.f==='1')===fail; b.classList.toggle('on',on); b.style.background=on?(fail?'var(--drop)':'var(--good)'):'var(--panel-2)'; b.style.color=on?(fail?'#fff':'#0b0e14'):'var(--muted)'; });
+    document.getElementById('lab1').innerHTML = fail? (now<cleanupT0?'핸들러가 <b style="color:var(--drop)">에러로 터졌어요</b> 💥 — 하지만…': '터졌어도 <b style="color:var(--v)">② 세션 닫기는 실행됐어요</b>. 정리 보장(finally처럼)!') : (now<closeEnd?'핸들러 정상 진행 중…':'정상 종료 → 세션 닫힘. 성공이든 에러든 <b>닫기는 항상</b>.');
+  }
+  rt.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; fail=b.dataset.f==='1'; if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),2800,()=>render(1)); });
+  render(0);
+})();
+
+// ===== STEP 2: lifetime = one request =====
+(function(){ const W=460,H=180; let cancel=null; const tmax=2.2;
+  function render(p){ const now=p*tmax; let s='';
+    // 두 요청 각자 세션 열고닫기
+    const tasks=[
+      {lane:'요청 A',t0:0.0,dur:0.15,label:'열기',kind:'run',color:'var(--v)'},{lane:'요청 A',t0:0.15,dur:0.6,label:'A 처리',kind:'run',color:'var(--q)'},{lane:'요청 A',t0:0.75,dur:0.15,label:'닫기',kind:'run',color:'var(--v)'},
+      {lane:'요청 B',t0:0.5,dur:0.15,label:'열기',kind:'run',color:'var(--v)'},{lane:'요청 B',t0:0.65,dur:0.6,label:'B 처리',kind:'run',color:'var(--pink)'},{lane:'요청 B',t0:1.25,dur:0.15,label:'닫기',kind:'run',color:'var(--v)'},
+    ];
+    const vis=tasks.filter(t=>t.t0<now+0.001).map(t=>({...t,dur:Math.max(0,Math.min(t.dur,now-t.t0))}));
+    s=A.loop(W,H,['요청 A','요청 B'],vis,tmax,{playhead:now,tick:0.5,padL:70});
+    document.getElementById('s2').innerHTML=A.svg(W,H,s,'요청에 묶인 수명');
+    document.getElementById('lab2').innerHTML = now<0.5?'요청 A가 <b>자기 세션</b>을 열어 일하고 닫아요.': '요청 A·B가 <b>각자 독립된 세션</b>을 열고 닫아요 — 동시에 와도 안 섞여요. 세션 수명 = 요청 수명.';
+  }
+  document.getElementById('go2').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),3000,()=>render(1)); };
+  document.getElementById('rst2').onclick=()=>{ if(cancel)cancel(); render(0); };
+  render(0);
+})();
+
+// ===== STEP 3: takeaways =====
+(function(){ const W=460,H=140;
+  let s=`<text x="${W/2}" y="24" fill="var(--good)" font-size="13" font-family="monospace" text-anchor="middle" font-weight="700">yield = 셋업 → 핸들러 → 정리(보장)</text>`;
+  const rows=[['yield 앞','셋업(세션 열기)','var(--v)'],['yield 뒤','정리(닫기) — 에러여도 항상','var(--good)'],['수명','요청 하나에 묶임','var(--hot)']];
+  rows.forEach((r,i)=>{ const y=38+i*32; s+=`<rect x="30" y="${y}" width="${W-60}" height="26" rx="7" fill="var(--panel)" stroke="${r[2]}" stroke-width="1.1"/><text x="46" y="${y+17}" fill="${r[2]}" font-size="11.5" font-family="monospace" font-weight="700">${r[0]}</text><text x="${W-46}" y="${y+17}" fill="var(--ink)" font-size="10.5" font-family="monospace" text-anchor="end">${r[1]}</text>`; });
+  document.getElementById('s3').innerHTML=A.svg(W,H,s,'정리');
+  document.getElementById('lab3').innerHTML=`이 세션들은 어디서 연결을 빌릴까? 그 뒤의 <b style="color:var(--q)">커넥션 풀</b>로.`;
+})();
+</script>
+</body>
+</html>

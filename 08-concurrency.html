@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>08 · 동시 요청과 백그라운드 — FastAPI, 눈으로 보기</title>
+<link rel="stylesheet" href="shared/theme.css">
+<link rel="icon" type="image/svg+xml" href="shared/favicon.svg">
+<style>
+  .scene{cursor:default;}
+  .big{font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--ink); margin:8px 2px 0;}
+  .ctl{display:flex; align-items:center; gap:10px; margin:10px 0; flex-wrap:wrap;}
+  .ctl label{font-size:13px; color:var(--muted);}
+  svg{display:block; width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:12px;}
+  .toggles{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .toggles button{font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);cursor:pointer}
+  .toggles button.on{color:#0b0e14;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topnav" id="topnav"></div>
+
+  <header>
+    <div class="tag" style="color:var(--hot)">PART C · async와 이벤트 루프 — CH 08</div>
+    <h1>동시 요청과 백그라운드</h1>
+    <p class="intro">제대로 쓴 비동기 서버는 <b>한 이벤트 루프</b>로 수백·수천 요청을 동시에 받아내요. 비결은 단순해요 — 각 요청은 시간의 <b>대부분을 기다리는 데</b> 쓰니까(DB·외부 API), 루프는 그 기다림의 틈을 메워 <b>다른 요청의 짧은 일</b>을 계속 처리하면 돼요. 그래서 동시 요청이 많아도 한 일꾼이 버텨내죠 — 단, <b>각 요청이 CPU를 짧게만</b> 쓸 때요(CH 07의 교훈). 이 챕터에선 또 하나 헷갈리는 걸 같이 봐요 — <b>백그라운드 태스크</b>. "응답을 먼저 보내고 뒤에서 마저 하는" 작업인데, 이름과 달리 <b>별도 병렬 일꾼이 아니라 같은 서버(루프/스레드풀)</b>에서 돌아요. 그래서 무거운 걸 넣으면 그 서버를 점유하죠.</p>
+  </header>
+
+  <nav class="stepper" id="stepper">
+    <button data-s="0" class="active">00 · 한 루프, 많은 요청</button>
+    <button data-s="1">01 · 얼마나 버틸까</button>
+    <button data-s="2">02 · 백그라운드 태스크의 정체</button>
+    <button data-s="3">03 · 정리</button>
+  </nav>
+
+  <!-- STEP 0 -->
+  <section class="panel show" data-panel="0">
+    <span class="kicker" style="color:var(--hot)">Step 00 — One Loop, Many Requests</span>
+    <h2>기다림의 틈을 메워 수많은 요청을</h2>
+    <p class="lead">요청 8개가 거의 동시에 쏟아져요. ▶를 누르면 한 이벤트 루프가 — 각 요청의 <b>짧은 일</b>을 처리하고, 그게 기다림(I/O)에 들어가면 <b>그 틈에 다음 요청</b>을 처리해요. 빗금(기다림)이 잔뜩 겹치는 동안 꽉 찬 막대(실행)는 <b>촘촘히 한 줄로</b> 이어지죠. 한 일꾼이 8개를 거의 동시에 처리한 것처럼 보여요.</p>
+    <div class="ctl"><button class="btn play" id="go0">▶ 8개 쏟아붓기</button> <button class="btn" id="rst0">↺ 리셋</button></div>
+    <div class="scene" id="s0"></div>
+    <p class="big" id="lab0"></p>
+    <p class="note" style="margin-top:6px">→ 핵심 조건: 각 요청이 CPU를 <b>짧게만</b> 써야 해요. 하나가 오래 붙잡으면(CH 07) 이 마법이 깨져요.</p>
+  </section>
+
+  <!-- STEP 1 -->
+  <section class="panel" data-panel="1">
+    <span class="kicker" style="color:var(--q)">Step 01 — How Many Can It Hold</span>
+    <h2>한 루프가 얼마나 버틸까</h2>
+    <p class="lead">동시 요청 수와 "각 요청의 기다림 비율"을 바꿔보세요. <b>기다림이 많을수록</b> 한 루프가 더 많은 요청을 <b>여유롭게</b> 처리해요(CPU는 짬짬이만 쓰니까). 막대는 "한 루프의 CPU가 얼마나 바쁜지"예요 — 기다림이 많으면 한산하고, 요청이 폭증하거나 CPU 일이 많으면 꽉 차서 지연이 생겨요.</p>
+    <div class="ctl"><label>동시 요청 <span id="nL" style="color:var(--hot)">50</span></label><input type="range" id="nv" min="1" max="200" step="1" value="50" style="flex:1">
+      <label>기다림 비율 <span id="ioL" style="color:var(--hot)">90%</span></label><input type="range" id="iov" min="0" max="100" step="5" value="90" style="flex:1"></div>
+    <div class="scene" id="s1"></div>
+    <p class="big" id="lab1"></p>
+    <p class="note" style="margin-top:6px">→ "동시 요청 한계"는 결국 <b>CPU 점유율</b> 문제예요 — 기다림이 많으면 한 루프로 충분, CPU 바운드면 워커를 늘려야(→ CH 16).</p>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="panel" data-panel="2">
+    <span class="kicker" style="color:var(--v)">Step 02 — Background Tasks</span>
+    <h2>백그라운드 태스크 — 응답 후, 같은 서버에서</h2>
+    <p class="lead">"가입 처리 후 환영 메일 보내기"처럼, 응답을 <b>먼저 빨리 돌려주고</b> 부수 작업은 뒤에서 하고 싶을 때 <b>백그라운드 태스크</b>를 써요. ▶로 보세요 — 핸들러가 <b>201 응답을 먼저 보내고</b>, 그 <b>다음에</b> 메일 작업이 돌아요. 단 오해 주의: 이건 <b>별도 병렬 일꾼이 아니라 같은 서버</b>(이벤트 루프/스레드풀)에서 돌아요. 가벼우면 OK, <b>무거운 걸 넣으면 그 서버를 점유</b>해 다른 요청에 영향을 줘요.</p>
+    <div class="toggles" id="bg"></div>
+    <div class="scene" id="s2"></div>
+    <p class="big" id="lab2"></p>
+    <p class="note" style="margin-top:6px">→ 진짜 무겁거나 분리하고 싶으면 <b>별도 작업 큐</b>(Celery 등 — 다른 프로세스/머신)를 써요. 백그라운드 태스크는 "가벼운 뒷정리"용이에요.</p>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="panel" data-panel="3">
+    <span class="kicker" style="color:var(--good)">Step 03 — Takeaways</span>
+    <h2>정리 — PART C를 닫으며</h2>
+    <p class="lead">한 이벤트 루프가 <b>수많은 요청</b>을 받아내는 건 각 요청이 대부분 <b>기다리기</b> 때문이에요 — 루프가 그 틈을 메우죠(각 요청이 CPU를 짧게 쓸 때만). 백그라운드 태스크는 <b>응답 후 같은 서버</b>에서 도는 가벼운 뒷작업이고요. 여기까지가 async의 핵심이에요. 이제 또 하나의 하이라이트 — 핸들러가 필요한 것(DB 세션·현재 사용자)을 <b>어떻게 받는지</b>, 의존성 주입의 세계로 가요.</p>
+    <div class="scene" id="s3"></div>
+    <p class="big" id="lab3"></p>
+    <p class="note" style="margin-top:14px">→ 다음 → <a href="09-depends.html" style="color:var(--q);font-weight:700">CH 09 · Depends</a></p>
+  </section>
+
+  <p class="foot">// 코드 없는 직관 입문 · <a href="index.html">목차</a></p>
+</div>
+
+<script src="shared/lib.js"></script>
+<script src="shared/lib-api.js"></script>
+<script>
+VZ.mountTopnav('#topnav', '08 · 동시 요청');
+VZ.setupStepper();
+const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
+
+// ===== STEP 0: one loop, 8 requests =====
+(function(){ const W=460,H=230; let cancel=null; const N=8; const tmax=2.0;
+  // 각 요청 i: 도착 i*0.05, work .1, wait .8, work .1
+  const cpu=[], waitL=[];
+  for(let i=0;i<N;i++){ const a=i*0.1; cpu.push({lane:'이벤트 루프(CPU)',t0:a,dur:0.1,label:'',kind:'run',color:`hsl(${200+i*18},70%,60%)`}); waitL.push({lane:'요청들',t0:a+0.1,dur:0.8,label:'',kind:'wait'}); cpu.push({lane:'이벤트 루프(CPU)',t0:a+0.9,dur:0.1,label:'',kind:'run',color:`hsl(${200+i*18},70%,60%)`}); }
+  function render(p){ const now=p*tmax; const all=cpu.concat(waitL);
+    const vis=all.filter(t=>t.t0<now+0.001).map(t=>({...t,dur:Math.min(t.dur,now-t.t0)}));
+    let s=A.loop(W,H,['이벤트 루프(CPU)','요청들'],vis,tmax,{playhead:now,tick:0.5,padL:96});
+    let served=0; cpu.filter((t,i)=>i%2===1).forEach(t=>{ if(now>=t.t0+t.dur) served++; });
+    let inflight=0; waitL.forEach(t=>{ if(now>=t.t0 && now<t.t0+t.dur) inflight++; });
+    s+=`<text x="${W-14}" y="13" fill="var(--ink)" font-size="10.5" font-family="monospace" text-anchor="end">처리 중 <tspan fill="var(--hot)" font-weight="700">${inflight}</tspan> · 완료 <tspan fill="var(--good)" font-weight="700">${served}</tspan>/${N}</text>`;
+    document.getElementById('s0').innerHTML=A.svg(W,H,s,'한 루프 여러 요청');
+    document.getElementById('lab0').innerHTML = now<0.02?'▶로 8개 요청을 쏟아부으세요.': `한 루프가 <b style="color:var(--hot)">${inflight}개</b>를 동시에 진행 중 — 실행(꽉 찬 막대)은 촘촘히 한 줄, 기다림은 잔뜩 겹쳐요.`;
+  }
+  document.getElementById('go0').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),3400,()=>render(1)); };
+  document.getElementById('rst0').onclick=()=>{ if(cancel)cancel(); render(0); };
+  render(0);
+})();
+
+// ===== STEP 1: how many can it hold =====
+(function(){ const W=460,H=160; let n=50, io=0.9;
+  const nv=document.getElementById('nv'), iov=document.getElementById('iov'), nL=document.getElementById('nL'), ioL=document.getElementById('ioL');
+  nv.oninput=()=>{ n=+nv.value; nL.textContent=n; render(); };
+  iov.oninput=()=>{ io=+iov.value/100; ioL.textContent=iov.value+'%'; render(); };
+  function render(){ // CPU 점유율 = n * (1-io) * 단위work / 처리용량. 근사 모델
+    const cpuLoad = clamp(n*(1-io)/20, 0, 1.3); // 1.0 넘으면 과부하
+    let s='';
+    s+=`<text x="20" y="34" fill="var(--muted)" font-size="11" font-family="monospace">한 루프 CPU 점유율</text>`;
+    const barW=W-40; s+=`<rect x="20" y="44" width="${barW}" height="22" rx="6" fill="var(--panel)" stroke="var(--line)"/>`;
+    const fillW=Math.min(barW,barW*cpuLoad); const col=cpuLoad>1?'var(--drop)':cpuLoad>0.75?'var(--hot)':'var(--good)';
+    s+=`<rect x="20" y="44" width="${fillW.toFixed(0)}" height="22" rx="6" fill="${col}"/>`;
+    s+=`<line x1="${20+barW}" y1="40" x2="${20+barW}" y2="70" stroke="var(--ink)" stroke-width="1" stroke-dasharray="2 2"/><text x="${20+barW}" y="80" fill="var(--muted)" font-size="8.5" font-family="monospace" text-anchor="end">100%</text>`;
+    s+=`<text x="${W/2}" y="110" fill="${col}" font-size="13" font-family="monospace" text-anchor="middle" font-weight="700">${(cpuLoad*100).toFixed(0)}% ${cpuLoad>1?'— 과부하! 지연 발생':cpuLoad>0.75?'— 바빠짐':'— 여유'}</text>`;
+    s+=`<text x="${W/2}" y="134" fill="var(--muted)" font-size="10.5" font-family="monospace" text-anchor="middle">동시 ${n}요청 · 기다림 ${(io*100).toFixed(0)}% → CPU는 ${((1-io)*100).toFixed(0)}%만 사용</text>`;
+    document.getElementById('s1').innerHTML=A.svg(W,H,s,'동시 요청 부하');
+    document.getElementById('lab1').innerHTML = cpuLoad>1? '<b style="color:var(--drop)">과부하</b> — 한 루프로 부족. 기다림을 늘리거나(I/O 위주) <b>워커를 늘려야</b>(CH16) 해요.': io>=0.8? `<b style="color:var(--good)">여유</b> — 기다림이 많아 ${n}요청도 한 루프가 거뜬해요.`:'CPU를 제법 써요 — 요청이 늘면 곧 한계에 닿아요.';
+  }
+  render();
+})();
+
+// ===== STEP 2: background tasks =====
+(function(){ let mode=0, cancel=null; const W=460; // 0 가벼움, 1 무거움
+  const MODES=[{k:'가벼운 백그라운드(메일)',c:'var(--good)'},{k:'무거운 백그라운드(영상 변환)',c:'var(--drop)'}];
+  const bg=document.getElementById('bg'); bg.innerHTML=MODES.map((m,i)=>`<button data-i="${i}">${m.k}</button>`).join('');
+  function render(p){ const H=170; const tmax=2.0; const now=p*tmax;
+    const bgDur = mode===0?0.3:1.2;
+    const lanes=['이벤트 루프','백그라운드(같은 서버)'];
+    const tasks=[
+      {lane:'이벤트 루프',t0:0,dur:0.2,label:'핸들러',kind:'run',color:'var(--good)'},
+      // 응답은 0.2에 나가고, 백그라운드 작업은 같은 서버의 백그라운드 레인에서 (병렬 일꾼 아님)
+      {lane:'백그라운드(같은 서버)',t0:0.2,dur:bgDur,label:mode===0?'메일 작업':'영상 변환(무거움)',kind:'run',color:mode===0?'var(--v)':'var(--hot)'},
+    ];
+    // 다른 요청 R2가 0.3에 도착. 무거우면 같은 서버 자원을 두고 경합 → 밀림
+    if(mode===0){ tasks.push({lane:'이벤트 루프',t0:0.3,dur:0.2,label:'R2',kind:'run',color:'var(--q)'}); }
+    else { tasks.push({lane:'이벤트 루프',t0:0.3,dur:0.1,label:'R2',kind:'run',color:'var(--q)'}); tasks.push({lane:'이벤트 루프',t0:0.4,dur:1.0,label:'R2 경합 지연',kind:'wait'}); tasks.push({lane:'이벤트 루프',t0:1.4,dur:0.1,label:'',kind:'run',color:'var(--q)'}); }
+    const vis=tasks.filter(t=>t.t0<now+0.001).map(t=>({...t,dur:Math.max(0,Math.min(t.dur,now-t.t0))}));
+    let s=A.loop(W,H,lanes,vis,tmax,{playhead:now,tick:0.5,padL:96});
+    if(now>=0.2) s+=A.statusBadge(150,128,201,'먼저 응답');
+    if(now>=0.2) s+=`<text x="150" y="150" fill="var(--muted)" font-size="9" font-family="monospace" text-anchor="middle">↑ 0.2s에 이미 응답 감</text>`;
+    s+=`<text x="${W-14}" y="13" fill="${MODES[mode].c}" font-size="10" font-family="monospace" text-anchor="end">${mode===0?'R2 빨리 처리됨':'R2가 경합으로 밀림'}</text>`;
+    document.getElementById('s2').innerHTML=A.svg(W,H,s,MODES[mode].k);
+    document.querySelectorAll('#bg button').forEach((b,i)=>{ const on=i===mode; b.classList.toggle('on',on); b.style.background=on?MODES[i].c:'var(--panel-2)'; b.style.color=on?(i===1?'#fff':'#0b0e14'):'var(--muted)'; });
+    document.getElementById('lab2').innerHTML = mode===0? '<b style="color:var(--good)">가벼운 작업</b>: 응답은 0.2s에 먼저 나가고, 짧은 메일 작업이 같은 서버에서 뒤따라요 — R2도 금방. 👍':'<b style="color:var(--hot)">무거운 작업</b>: 응답은 먼저 갔지만 영상 변환이 <b>같은 서버 자원을 1.2s 점유</b>(별도 병렬 일꾼이 아님!) → R2가 경합으로 밀려요. 이런 건 작업 큐로! 👎';
+  }
+  bg.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; mode=+b.dataset.i; if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),2400,()=>render(1)); });
+  function loop(){ cancel=VZ.LA.tween(p=>render(p),2600,()=>render(1)); } loop();
+})();
+
+// ===== STEP 3: takeaways =====
+(function(){ const W=460,H=140;
+  let s=`<text x="${W/2}" y="24" fill="var(--good)" font-size="13" font-family="monospace" text-anchor="middle" font-weight="700">한 루프가 수많은 요청을 — 기다림 덕에</text>`;
+  const rows=[['동시 처리','각 요청이 CPU를 짧게 쓸 때','var(--good)'],['한계','CPU 바운드면 워커 늘려야(CH16)','var(--hot)'],['백그라운드','응답 후 같은 서버 — 가벼운 것만','var(--v)']];
+  rows.forEach((r,i)=>{ const y=38+i*32; s+=`<rect x="24" y="${y}" width="${W-48}" height="26" rx="7" fill="var(--panel)" stroke="${r[2]}" stroke-width="1.1"/><text x="40" y="${y+17}" fill="${r[2]}" font-size="11" font-family="monospace" font-weight="700">${r[0]}</text><text x="${W-40}" y="${y+17}" fill="var(--ink)" font-size="10" font-family="monospace" text-anchor="end">${r[1]}</text>`; });
+  document.getElementById('s3').innerHTML=A.svg(W,H,s,'정리');
+  document.getElementById('lab3').innerHTML=`async는 끝 — 이제 핸들러가 필요한 걸 어떻게 받나, <b style="color:var(--hot)">의존성 주입</b>으로.`;
+})();
+</script>
+</body>
+</html>

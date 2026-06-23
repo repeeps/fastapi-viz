@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>16 · 배포와 워커 — FastAPI, 눈으로 보기</title>
+<link rel="stylesheet" href="shared/theme.css">
+<link rel="icon" type="image/svg+xml" href="shared/favicon.svg">
+<style>
+  .scene{cursor:default;}
+  .big{font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--ink); margin:8px 2px 0;}
+  .ctl{display:flex; align-items:center; gap:10px; margin:10px 0; flex-wrap:wrap;}
+  .ctl label{font-size:13px; color:var(--muted);}
+  svg{display:block; width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:12px;}
+  .toggles{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .toggles button{font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);cursor:pointer}
+  .toggles button.on{color:#0b0e14;font-weight:700}
+  .links{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+  .links a{text-decoration:none;flex:1;min-width:200px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;transition:.2s}
+  .links a:hover{transform:translateY(-3px);border-color:var(--q)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topnav" id="topnav"></div>
+
+  <header>
+    <div class="tag" style="color:var(--pink)">PART F · 실전·운영 — CH 16</div>
+    <h1>배포와 워커</h1>
+    <p class="intro">코드를 짰으면 실제로 <b>띄워야</b> 해요. FastAPI 앱은 스스로 못 돌고, 앞단에 <b>ASGI 서버</b>(uvicorn 등)가 있어 요청을 받아 앱의 <b>이벤트 루프에 태워줘요</b>(0번의 문지기). 트래픽이 늘면? 두 가지 손잡이가 있어요. <b>① async(동시성)</b> — 한 워커(프로세스) 안에서 이벤트 루프가 기다림의 틈을 메워 많은 요청을 받아내요(PART C). <b>② 워커(병렬성)</b> — 같은 앱을 <b>여러 프로세스로 복제</b>해 띄우면(각자 독립된 이벤트 루프) 진짜 동시에 여러 요청을 <b>실행</b>해요. 핵심 구분 — <b>I/O 대기가 많으면 async로 충분</b>(워커 적게), <b>CPU 계산이 많으면 워커를 늘려야</b> 해요(보통 CPU 코어 수에 맞춰). async가 못 하는 "진짜 병렬 실행"을 워커가 채우는 거죠. 마지막으로 이 트랙이 <b>안 다룬 것들</b>과 다음 발걸음을 정리하며 마무리해요.</p>
+  </header>
+
+  <nav class="stepper" id="stepper">
+    <button data-s="0" class="active">00 · ASGI와 워커</button>
+    <button data-s="1">01 · 워커 vs async</button>
+    <button data-s="2">02 · 너머의 주제들</button>
+    <button data-s="3">03 · 마무리</button>
+  </nav>
+
+  <!-- STEP 0 -->
+  <section class="panel show" data-panel="0">
+    <span class="kicker" style="color:var(--hot)">Step 00 — ASGI & Workers</span>
+    <h2>문지기(ASGI) + 복제된 워커들</h2>
+    <p class="lead">맨 앞 <b>ASGI 서버</b>가 들어온 요청을 <b>워커들에 나눠줘요</b>. 워커 수를 바꿔보세요 — 워커는 <b>같은 앱의 복제 프로세스</b>이고 <b>각자 독립된 이벤트 루프</b>를 가져요. 워커가 많을수록 <b>진짜 동시에</b> 처리할 수 있는 요청이 늘죠(각 워커는 또 자기 루프로 여러 요청을 동시 처리하고요).</p>
+    <div class="ctl"><label>워커 수 <span id="wL" style="color:var(--hot)">1</span></label><input type="range" id="wv" min="1" max="4" step="1" value="1" style="flex:1"></div>
+    <div class="scene" id="s0"></div>
+    <p class="big" id="lab0"></p>
+    <p class="note" style="margin-top:6px">→ 워커 = 프로세스(메모리 따로, CPU 병렬은 코어 수까지). async = 한 워커 안에서 I/O 대기를 겹쳐 받는 동시성. <b>서로 다른 차원</b>이에요 — 워커는 계산을, async는 기다림을.</p>
+  </section>
+
+  <!-- STEP 1 -->
+  <section class="panel" data-panel="1">
+    <span class="kicker" style="color:var(--q)">Step 01 — Workers vs Async</span>
+    <h2>무엇을 늘려야 하나 — 일의 성격에 따라</h2>
+    <p class="lead">일의 성격(기다림 위주 vs CPU 위주)을 바꿔보세요. <b>I/O 위주</b>(DB·API 대기): 한 워커의 async만으로도 충분 — 워커를 늘려도 큰 이득 없어요. <b>CPU 위주</b>(계산·이미지 처리): 한 루프로는 안 빨라지니(병렬 아님) <b>워커(프로세스)를 코어 수만큼</b> 늘려야 진짜 동시에 계산해요. async는 기다림을, 워커는 계산을 — 서로 다른 손잡이예요.</p>
+    <div class="toggles" id="wk"></div>
+    <div class="scene" id="s1"></div>
+    <p class="big" id="lab1"></p>
+    <p class="note" style="margin-top:6px">→ 실무 출발점: I/O 위주 API는 워커 적게+async, CPU 위주는 워커를 코어 수에. 무거운 작업은 작업 큐로 빼고요(CH08).</p>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="panel" data-panel="2">
+    <span class="kicker" style="color:var(--v)">Step 02 — Beyond</span>
+    <h2>너머의 주제들 — 이 트랙이 안 다룬 것</h2>
+    <p class="lead">입문에서 일부러 미룬, 실무에서 만나는 주제들이에요. 각 카드를 눌러 무엇이고 언제 필요한지 보세요. 지금 다 알 필요는 없어요 — "이런 게 있구나" 정도면 충분하고, 필요할 때 찾아 들어가면 돼요.</p>
+    <div class="toggles" id="topics"></div>
+    <div class="scene" id="s2"></div>
+    <p class="big" id="lab2"></p>
+    <p class="note" style="margin-top:6px">→ 이 트랙의 멘탈 모델(요청 여정·async·DI·풀)이 있으면, 이 주제들도 "어디에 붙는 이야기"인지 빨리 자리잡혀요.</p>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="panel" data-panel="3">
+    <span class="kicker" style="color:var(--good)">Step 03 — Closing</span>
+    <h2>마무리 — 요청 하나의 여정을 읽는 눈</h2>
+    <p class="lead">처음엔 "요청을 보내면 응답이 온다" 정도였다면, 이제 그 사이 서버 안에서 <b>무엇이 어떻게 도는지</b>가 보여요 — 어디로 가고(라우팅) · 어떻게 걸러지고(검증·응답모델) · 한 일꾼이 어떻게 수천 요청을 받고(async·이벤트 루프) · 준비물을 어떻게 받고(의존성 주입) · 연결을 어떻게 빌리고(풀) · 누구인지 어떻게 확인하고(인증) · 어떻게 감싸이고(미들웨어) · 어떻게 띄워지는지(워커)까지. FastAPI는 결국 <b>보이지 않던 런타임을 한 줄씩 읽어내는</b> 일이었어요. 그 눈이 생겼다면, 어떤 백엔드 코드 앞에서도 길을 잃지 않을 거예요.</p>
+    <div class="scene" id="s3"></div>
+    <p class="big" id="lab3"></p>
+    <div class="links">
+      <a href="00-intro.html"><div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--hot)">처음으로</div><div style="color:var(--ink);font-weight:700;margin-top:4px">0번 · 요청의 여정</div><div style="color:var(--muted);font-size:12.5px;margin-top:4px">전체 그림 다시 보기</div></a>
+      <a href="index.html"><div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--q)">목차</div><div style="color:var(--ink);font-weight:700;margin-top:4px">전체 16챕터</div><div style="color:var(--muted);font-size:12.5px;margin-top:4px">아무 챕터나 다시</div></a>
+    </div>
+    <p class="note" style="margin-top:14px">// 로봇·시스템을 잇는 백엔드가 궁금하면 자매 트랙 "ROS2, 눈으로 보기"로 — 노드들이 메시지로 협력하는 또 다른 런타임이에요.</p>
+  </section>
+
+  <p class="foot">// 코드 없는 직관 입문 · <a href="index.html">목차</a></p>
+</div>
+
+<script src="shared/lib.js"></script>
+<script src="shared/lib-api.js"></script>
+<script>
+VZ.mountTopnav('#topnav', '16 · 배포');
+VZ.setupStepper();
+const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
+
+// ===== STEP 0: ASGI + workers =====
+(function(){ const W=460,H=210; let nw=1;
+  const wv=document.getElementById('wv'), wL=document.getElementById('wL');
+  wv.oninput=()=>{ nw=+wv.value; wL.textContent=nw; render(); };
+  function render(){ let s='';
+    // ASGI 문지기
+    s+=A.box(20,80,90,48,'ASGI 서버',{color:'var(--hot)',sub:'요청 분배',fs:10.5});
+    s+=`<text x="65" y="68" fill="var(--muted)" font-size="9" font-family="monospace" text-anchor="middle">요청들 →</text>`;
+    // 워커들
+    for(let i=0;i<nw;i++){ const y=20+i*(180/nw); const h=Math.min(44,180/nw-8);
+      s+=`<rect x="180" y="${y}" width="${W-210}" height="${h}" rx="8" fill="var(--panel)" stroke="var(--q)" stroke-width="1.6"/>`;
+      s+=`<text x="195" y="${y+h/2+4}" fill="var(--q)" font-size="11" font-family="monospace" font-weight="700">워커 ${i+1}</text>`;
+      s+=`<text x="${W-45}" y="${y+h/2+4}" fill="var(--muted)" font-size="8.5" font-family="monospace" text-anchor="end">이벤트 루프</text>`;
+      s+=A.edge(110,104,180,y+h/2,{color:'var(--line)',lw:1.2,dash:'3 2'});
+    }
+    document.getElementById('s0').innerHTML=A.svg(W,H,s,'ASGI와 워커');
+    document.getElementById('lab0').innerHTML = `워커 <b style="color:var(--q)">${nw}개</b> — 각자 독립 프로세스+이벤트 루프. ASGI가 요청을 나눠줘요. ${nw===1?'(기본: 1워커, async로 동시성)':`CPU 병렬 처리 폭 ↑ (코어 수까지)`}`;
+  }
+  render();
+})();
+
+// ===== STEP 1: workers vs async =====
+(function(){ let cpu=false;
+  const wk=document.getElementById('wk'); wk.innerHTML=`<button data-c="0">I/O 위주 (DB·API 대기)</button><button data-c="1">CPU 위주 (계산·이미지)</button>`;
+  function render(){ const W=460,H=170; let s='';
+    s+=`<text x="20" y="30" fill="var(--muted)" font-size="11" font-family="monospace">처방:</text>`;
+    if(!cpu){ s+=`<text x="20" y="58" fill="var(--good)" font-size="12.5" font-family="monospace">async (1~소수 워커)로 충분</text>`;
+      s+=`<text x="20" y="80" fill="var(--muted)" font-size="10.5" font-family="monospace">기다림이 많아 한 루프가 틈을 메워 수천 요청 처리.</text>`;
+      s+=`<text x="20" y="98" fill="var(--muted)" font-size="10.5" font-family="monospace">워커를 늘려도 큰 이득 없음(이미 CPU 한산).</text>`;
+      // 막대: async 한 워커로 처리량 높음
+      s+=`<rect x="20" y="116" width="${W-40}" height="22" rx="5" fill="var(--good)" opacity="0.85"/><text x="${W/2}" y="131" fill="#0b0e14" font-size="11" font-family="monospace" text-anchor="middle" font-weight="700">1 워커 + async → 높은 처리량</text>`;
+    } else { s+=`<text x="20" y="58" fill="var(--hot)" font-size="12.5" font-family="monospace">워커를 코어 수만큼 늘려라</text>`;
+      s+=`<text x="20" y="80" fill="var(--muted)" font-size="10.5" font-family="monospace">CPU 계산은 한 루프로 안 빨라짐(병렬 아님).</text>`;
+      s+=`<text x="20" y="98" fill="var(--muted)" font-size="10.5" font-family="monospace">프로세스를 늘려야 진짜 동시 계산. (무거우면 작업 큐)</text>`;
+      s+=`<rect x="20" y="116" width="${(W-40)/4}" height="22" rx="5" fill="var(--drop)" opacity="0.85"/><text x="${20+(W-40)/8}" y="131" fill="#fff" font-size="9.5" font-family="monospace" text-anchor="middle">1워커</text>`;
+      s+=`<rect x="${20+(W-40)/4+6}" y="116" width="${(W-40)*3/4-6}" height="22" rx="5" fill="var(--good)" opacity="0.85"/><text x="${20+(W-40)/4+6+((W-40)*3/4)/2}" y="131" fill="#0b0e14" font-size="10" font-family="monospace" text-anchor="middle" font-weight="700">코어 4개면 4워커 → ×4</text>`;
+    }
+    document.getElementById('s1').innerHTML=A.svg(W,H,s,cpu?'CPU 위주':'I/O 위주');
+    document.querySelectorAll('#wk button').forEach(b=>{ const on=(b.dataset.c==='1')===cpu; b.classList.toggle('on',on); b.style.background=on?(cpu?'var(--hot)':'var(--good)'):'var(--panel-2)'; b.style.color=on?'#0b0e14':'var(--muted)'; });
+    document.getElementById('lab1').innerHTML = cpu? '<b style="color:var(--hot)">CPU 위주</b>: 워커(프로세스)를 코어 수만큼 — 진짜 병렬 계산. async로는 안 빨라져요.' : '<b style="color:var(--good)">I/O 위주</b>: async가 기다림을 메워 한 워커로도 충분. 워커 증설 이득 적음.';
+  }
+  wk.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; cpu=b.dataset.c==='1'; render(); });
+  render();
+})();
+
+// ===== STEP 2: beyond topics =====
+(function(){ let sel=0;
+  const T=[
+    {k:'웹소켓',why:'요청-응답 한 쌍이 아니라 양방향 연결을 계속 열어두기(실시간 채팅·알림). FastAPI가 지원하지만 수명·연결 관리가 또 다른 주제예요.'},
+    {k:'캐싱 (Redis)',why:'자주 같은 결과를 줄 땐 DB 대신 빠른 캐시(Redis)에서. 응답 속도를 크게 높이지만 "언제 캐시를 비우나(무효화)"가 어려운 문제.'},
+    {k:'작업 큐 (Celery)',why:'무거운/긴 작업(영상 변환·대량 메일)은 별도 워커 프로세스/머신으로. 백그라운드 태스크(CH08)와 달리 진짜 분리된 일꾼이에요.'},
+    {k:'테스트',why:'TestClient로 실제 서버 없이 엔드포인트를 호출해 검증. 의존성 override(CH09)로 DB를 가짜로 바꿔 빠르게 테스트.'},
+    {k:'설정·환경변수',why:'DB 주소·비밀 키 같은 건 코드가 아니라 환경변수로(Pydantic Settings). 개발/운영 환경을 코드 변경 없이 전환.'},
+    {k:'로깅·모니터링',why:'운영 중 무슨 일이 나는지 보려면 구조적 로그·메트릭·추적이 필요. "왜 느리지/왜 터졌지"를 사후에 추적하는 눈.'},
+  ];
+  const tp=document.getElementById('topics'); tp.innerHTML=T.map((t,i)=>`<button data-i="${i}">${t.k}</button>`).join('');
+  function render(){ const W=460,H=160; const t=T[sel]; let s='';
+    s+=`<rect x="14" y="14" width="${W-28}" height="${H-28}" rx="12" fill="var(--panel-2)" stroke="var(--v)"/>`;
+    s+=`<text x="32" y="42" fill="var(--v)" font-size="14" font-family="monospace" font-weight="700">${t.k}</text>`;
+    s+=`<foreignObject x="32" y="54" width="${W-64}" height="94"><div xmlns="http://www.w3.org/1999/xhtml" style="font-family:monospace;font-size:12.5px;line-height:1.6;color:#cdd6f4">${t.why}</div></foreignObject>`;
+    document.getElementById('s2').innerHTML=A.svg(W,H,s,t.k);
+    document.querySelectorAll('#topics button').forEach((b,i)=>{ const on=i===sel; b.classList.toggle('on',on); b.style.background=on?'var(--v)':'var(--panel-2)'; b.style.color=on?'#0b0e14':'var(--muted)'; });
+    document.getElementById('lab2').innerHTML='지금은 "이런 게 있구나"면 충분 — 필요할 때 찾아 들어가세요.';
+  }
+  tp.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; sel=+b.dataset.i; render(); });
+  render();
+})();
+
+// ===== STEP 3: closing =====
+(function(){ const W=460,H=150;
+  const J=['요청','라우팅','검증','async','의존성','풀','인증','미들웨어','배포'];
+  let s=`<text x="${W/2}" y="26" fill="var(--good)" font-size="13" font-family="monospace" text-anchor="middle" font-weight="700">요청 하나의 여정을 읽는 눈</text>`;
+  J.forEach((j,i)=>{ const cols=5; const x=24+(i%cols)*((W-48)/cols), y=46+Math.floor(i/cols)*40; const cw=(W-48)/cols-6;
+    s+=`<rect x="${x}" y="${y}" width="${cw}" height="30" rx="6" fill="var(--panel)" stroke="var(--q)" stroke-width="1"/><text x="${x+cw/2}" y="${y+19}" fill="var(--ink)" font-size="9.5" font-family="monospace" text-anchor="middle">${j}</text>`;
+  });
+  s+=`<text x="${W/2}" y="142" fill="var(--muted)" font-size="10.5" font-family="monospace" text-anchor="middle">보이지 않던 런타임을 한 줄씩 읽어내는 일</text>`;
+  document.getElementById('s3').innerHTML=A.svg(W,H,s,'마무리');
+  document.getElementById('lab3').innerHTML='끝까지 함께해줘서 고마워요. 어떤 백엔드 코드 앞에서도 길을 잃지 않길!';
+})();
+</script>
+</body>
+</html>

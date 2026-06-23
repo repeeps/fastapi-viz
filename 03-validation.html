@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 · Pydantic 검증 — FastAPI, 눈으로 보기</title>
+<link rel="stylesheet" href="shared/theme.css">
+<link rel="icon" type="image/svg+xml" href="shared/favicon.svg">
+<style>
+  .scene{cursor:default;}
+  .big{font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--ink); margin:8px 2px 0;}
+  .ctl{display:flex; align-items:center; gap:10px; margin:10px 0; flex-wrap:wrap;}
+  svg{display:block; width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:12px;}
+  .toggles{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .toggles button{font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);cursor:pointer}
+  .toggles button.on{color:#0b0e14;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topnav" id="topnav"></div>
+
+  <header>
+    <div class="tag" style="color:var(--v)">PART B · 입력과 출력 — CH 03</div>
+    <h1>Pydantic 검증</h1>
+    <p class="intro">바깥에서 온 입력은 <b>믿으면 안 돼요</b> — 빠진 필드, 틀린 타입, 말도 안 되는 값이 수두룩하죠. FastAPI는 <b>Pydantic</b>으로 이걸 <b>문 앞에서</b> 거릅니다. 핸들러가 "이 요청은 이런 모양(name은 문자열, age는 정수…)"이라고 <b>모델</b>로 선언하면, 들어온 JSON을 그 틀에 맞춰보고 — 맞으면 <b>타입이 보장된 깨끗한 객체</b>로 바꿔 핸들러에 넘기고, 안 맞으면 <b>핸들러에 닿기도 전에</b> 무엇이 왜 틀렸는지 적은 <b>422</b>로 돌려보내요. 덕분에 핸들러 안에서는 "혹시 age가 문자열이면?" 같은 방어 코드를 안 짜도 돼요. 검증은 핸들러의 <b>문지기</b>예요.</p>
+  </header>
+
+  <nav class="stepper" id="stepper">
+    <button data-s="0" class="active">00 · 문지기</button>
+    <button data-s="1">01 · 입력 망가뜨리기</button>
+    <button data-s="2">02 · 핸들러 전에 막는다</button>
+    <button data-s="3">03 · 정리</button>
+  </nav>
+
+  <!-- STEP 0 -->
+  <section class="panel show" data-panel="0">
+    <span class="kicker" style="color:var(--hot)">Step 00 — The Gatekeeper</span>
+    <h2>JSON이 모델 틀을 통과하면</h2>
+    <p class="lead">▶를 누르면 들어온 JSON <code>{name, age, email}</code>이 <b>UserModel 문지기</b> 앞에 서요. 문지기는 필드를 하나씩 검사해요 — name은 문자열? age는 정수? email은 형식 맞음? 다 통과하면 <b>타입 있는 객체</b>가 되어 핸들러로. 핸들러는 깨끗한 입력만 받죠.</p>
+    <div class="ctl"><button class="btn play" id="go0">▶ 검증 통과</button> <button class="btn" id="rst0">↺ 리셋</button></div>
+    <div class="scene" id="s0"></div>
+    <p class="big" id="lab0"></p>
+    <p class="note" style="margin-top:6px">→ 문자열 <code>"25"</code>도 age:int면 Pydantic이 <b>25(정수)로 변환</b>해줘요(가능하면). 변환 불가하면 막고요.</p>
+  </section>
+
+  <!-- STEP 1 -->
+  <section class="panel" data-panel="1">
+    <span class="kicker" style="color:var(--q)">Step 01 — Break the Input</span>
+    <h2>입력을 직접 망가뜨려 보기</h2>
+    <p class="lead">각 필드를 <b>망가뜨려</b> 보세요(타입 틀리기·빼기). 문지기가 <b>어느 필드가 왜</b> 틀렸는지 짚어내요. 하나라도 틀리면 결과는 <b>422</b> — 그리고 핸들러는 <b>실행조차 안 돼요</b>. 에러 메시지에 필드 위치가 다 들어 있어서, "분명 보냈는데 422"의 원인을 바로 찾을 수 있어요.</p>
+    <div class="toggles" id="fld"></div>
+    <div class="scene" id="s1"></div>
+    <p class="big" id="lab1"></p>
+    <p class="note" style="margin-top:6px">→ 422 = "형식은 JSON인데 <b>내용이 모델과 안 맞음</b>". 400(아예 깨진 요청)과는 달라요.</p>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="panel" data-panel="2">
+    <span class="kicker" style="color:var(--v)">Step 02 — Blocked Before the Handler</span>
+    <h2>핸들러 전에 막는다 — 그래서 핸들러가 깨끗하다</h2>
+    <p class="lead">검증이 파이프라인의 <b>어디</b>에 있는지가 핵심이에요. 라우팅 다음, <b>핸들러 바로 앞</b>이죠. 토글로 입력을 유효/무효로 바꿔보세요 — 무효면 검증 칸에서 <b>막혀</b> 핸들러로 못 가고 422가 바로 나가요. 유효해야만 핸들러가 돌아요. 덕분에 핸들러 안에는 방어 코드가 필요 없어요.</p>
+    <div class="toggles" id="vt"></div>
+    <div class="scene" id="s2"></div>
+    <p class="big" id="lab2"></p>
+    <p class="note" style="margin-top:6px">→ "핸들러는 항상 올바른 입력만 받는다"는 보장 — 이게 Pydantic 검증이 주는 가장 큰 선물이에요.</p>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="panel" data-panel="3">
+    <span class="kicker" style="color:var(--good)">Step 03 — Takeaways</span>
+    <h2>정리 — 검증을 한 문장으로</h2>
+    <p class="lead">Pydantic 검증은 <b>들어온 JSON을 모델 틀에 맞춰, 통과하면 타입 보장 객체로·실패하면 핸들러 전에 422로</b> 돌려보내는 문지기예요. 핸들러는 깨끗한 입력만 받죠. 입력을 거르는 법을 봤으니, 이번엔 반대 방향 — <b>내보내는 것</b>을 거르는 법이에요. 비밀번호 같은 게 실수로 새 나가지 않게요.</p>
+    <div class="scene" id="s3"></div>
+    <p class="big" id="lab3"></p>
+    <p class="note" style="margin-top:14px">→ 다음 → <a href="04-response.html" style="color:var(--q);font-weight:700">CH 04 · 응답 모델</a></p>
+  </section>
+
+  <p class="foot">// 코드 없는 직관 입문 · <a href="index.html">목차</a></p>
+</div>
+
+<script src="shared/lib.js"></script>
+<script src="shared/lib-api.js"></script>
+<script>
+VZ.mountTopnav('#topnav', '03 · 검증');
+VZ.setupStepper();
+const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
+
+// ===== STEP 0: gatekeeper pass =====
+(function(){ const W=460,H=220; let cancel=null;
+  function render(p){ let s='';
+    // 들어온 JSON
+    s+=`<rect x="14" y="20" width="150" height="84" rx="8" fill="var(--panel)" stroke="var(--q)" stroke-width="1.6"/>`;
+    s+=`<text x="26" y="40" fill="var(--q)" font-size="10" font-family="monospace">들어온 JSON</text>`;
+    s+=`<text x="26" y="60" fill="var(--ink)" font-size="10.5" font-family="monospace">name: "Jay"</text>`;
+    s+=`<text x="26" y="78" fill="var(--ink)" font-size="10.5" font-family="monospace">age: "25"</text>`;
+    s+=`<text x="26" y="96" fill="var(--ink)" font-size="10.5" font-family="monospace">email: "j@x.io"</text>`;
+    // (모델 필드 타입은 STEP1과 통일: email은 EmailStr)
+    // 문지기
+    s+=`<rect x="190" y="20" width="90" height="160" rx="10" fill="rgba(192,132,252,.08)" stroke="var(--v)" stroke-width="2"/>`;
+    s+=`<text x="235" y="40" fill="var(--v)" font-size="11" font-family="monospace" text-anchor="middle" font-weight="700">UserModel</text>`;
+    s+=`<text x="235" y="54" fill="var(--muted)" font-size="9" font-family="monospace" text-anchor="middle">문지기</text>`;
+    const checks=[['name: str',0.2],['age: int',0.4],['email: EmailStr',0.6]];
+    checks.forEach((c,i)=>{ const ok=p>c[1]; s+=`<text x="200" y="${80+i*26}" fill="${ok?'var(--good)':'var(--muted)'}" font-size="10" font-family="monospace">${ok?'✓':'·'} ${c[0]}</text>`; });
+    // 핸들러
+    const passed=p>0.7;
+    s+=A.box(310,80,130,44,'핸들러',{color:passed?'var(--good)':'var(--line)',sub:passed?'깨끗한 객체 받음':'대기',dim:!passed});
+    if(p>0.62 && p<0.95){ const u=clamp((p-0.62)/0.2,0,1); const x=282+(308-282)*u; s+=A.packet(x,102,{color:'var(--good)'}); }
+    document.getElementById('s0').innerHTML=A.svg(W,H,s,'검증 문지기');
+    document.getElementById('lab0').innerHTML = p<0.2?'JSON이 문지기 앞에 도착.': p<0.7?'문지기가 필드를 하나씩 검사 중 — 타입이 맞나?':'<b style="color:var(--good)">전부 통과</b> → 타입 보장 객체로 핸들러에. (age "25"→25 변환됨)';
+  }
+  document.getElementById('go0').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),2600,()=>render(1)); };
+  document.getElementById('rst0').onclick=()=>{ if(cancel)cancel(); render(0); };
+  render(0);
+})();
+
+// ===== STEP 1: break the input =====
+(function(){ const W=460,H=200;
+  // 각 필드 상태 토글
+  const F=[{name:'name',type:'str',bad:false,badval:'(빠짐)',goodval:'"Jay"',badmsg:'필수 누락'},
+           {name:'age',type:'int',bad:false,badval:'"스물다섯"',goodval:'25',badmsg:'정수 아님'},
+           {name:'email',type:'EmailStr',bad:false,badval:'"not-email"',goodval:'"j@x.io"',badmsg:'형식 오류'}];
+  const fld=document.getElementById('fld');
+  fld.innerHTML=F.map((f,i)=>`<button data-i="${i}">${f.name} 망가뜨리기</button>`).join('');
+  function render(){ let s=''; const anyBad=F.some(f=>f.bad);
+    s+=A.fields(20,18,F.map(f=>({name:f.name,type:f.type+' = '+(f.bad?f.badval:f.goodval),ok:!f.bad,msg:f.bad?f.badmsg:''})),{w:W-40,rowH:30});
+    const y=130;
+    if(anyBad){ s+=A.statusBadge(W/2,y+8,422,'Unprocessable'); s+=`<text x="${W/2}" y="${y+34}" fill="var(--drop)" font-size="10.5" font-family="monospace" text-anchor="middle">✗ 핸들러 실행 안 됨 — ${F.filter(f=>f.bad).length}개 필드 오류</text>`; }
+    else { s+=A.statusBadge(W/2,y+8,200,'OK'); s+=`<text x="${W/2}" y="${y+34}" fill="var(--good)" font-size="10.5" font-family="monospace" text-anchor="middle">✓ 통과 → 핸들러로</text>`; }
+    document.getElementById('s1').innerHTML=A.svg(W,H,s,'입력 검증');
+    document.querySelectorAll('#fld button').forEach((b,i)=>{ b.classList.toggle('on',F[i].bad); b.style.background=F[i].bad?'var(--drop)':'var(--panel-2)'; b.style.color=F[i].bad?'#fff':'var(--muted)'; b.textContent=F[i].name+(F[i].bad?' 고치기':' 망가뜨리기'); });
+    document.getElementById('lab1').innerHTML = anyBad? `<b style="color:var(--drop)">422</b> — ${F.filter(f=>f.bad).map(f=>f.name+'('+f.badmsg+')').join(', ')}. 핸들러는 안 돌아요.` : '<b style="color:var(--good)">전부 유효</b> — 핸들러로 깨끗하게 넘어가요. 필드를 망가뜨려 보세요.';
+  }
+  fld.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; const i=+b.dataset.i; F[i].bad=!F[i].bad; render(); });
+  render();
+})();
+
+// ===== STEP 2: blocked before handler =====
+(function(){ const W=460,H=170; let valid=true;
+  const vt=document.getElementById('vt');
+  vt.innerHTML=`<button data-v="1">유효한 입력</button><button data-v="0">무효한 입력</button>`;
+  function render(){ const stages=[{label:'라우팅',color:'var(--q)'},{label:'검증',color:'var(--v)'},{label:'핸들러',color:'var(--good)'},{label:'응답',color:'var(--pink)'}];
+    let s=''; const blockIdx=1; // 검증서 막힘
+    const activeIdx = valid?3:1;
+    s+=A.stageBar(20,40,W-40,stages,activeIdx,{h:34});
+    if(!valid){ // 검증에서 422가 바로 응답으로 빠짐
+      s+=`<text x="${20+(W-40)/4*1.5}" y="100" fill="var(--drop)" font-size="11" font-family="monospace" text-anchor="middle">✗ 막힘</text>`;
+      s+=A.statusBadge(W/2,128,422,'바로 응답');
+      s+=`<text x="${W/2}" y="154" fill="var(--muted)" font-size="10" font-family="monospace" text-anchor="middle">핸들러·응답 단계는 건너뜀</text>`;
+    } else { s+=A.statusBadge(W/2,128,200,'OK'); s+=`<text x="${W/2}" y="154" fill="var(--good)" font-size="10" font-family="monospace" text-anchor="middle">검증 통과 → 핸들러 실행 → 응답</text>`; }
+    document.getElementById('s2').innerHTML=A.svg(W,H,s,'핸들러 전 차단');
+    document.querySelectorAll('#vt button').forEach(b=>{ const on=(b.dataset.v==='1')===valid; b.classList.toggle('on',on); b.style.background=on?(valid?'var(--good)':'var(--drop)'):'var(--panel-2)'; b.style.color=on?(valid?'#0b0e14':'#fff'):'var(--muted)'; });
+    document.getElementById('lab2').innerHTML = valid? '<b style="color:var(--good)">유효</b> — 검증을 지나 핸들러까지. 핸들러는 깨끗한 입력만 봐요.' : '<b style="color:var(--drop)">무효</b> — <b>검증 칸에서 막혀</b> 핸들러에 닿지 못하고 422가 바로 나가요.';
+  }
+  vt.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; valid=b.dataset.v==='1'; render(); });
+  render();
+})();
+
+// ===== STEP 3: takeaways =====
+(function(){ const W=460,H=140;
+  let s=`<text x="${W/2}" y="24" fill="var(--good)" font-size="13" font-family="monospace" text-anchor="middle" font-weight="700">검증 = 핸들러 앞의 문지기</text>`;
+  const rows=[['통과','타입 보장 객체 → 핸들러','var(--good)'],['실패','핸들러 전에 422 (어느 필드·왜)','var(--drop)'],['선물','핸들러에 방어 코드 불필요','var(--v)']];
+  rows.forEach((r,i)=>{ const y=38+i*32; s+=`<rect x="30" y="${y}" width="${W-60}" height="26" rx="7" fill="var(--panel)" stroke="${r[2]}" stroke-width="1.1"/><text x="46" y="${y+17}" fill="${r[2]}" font-size="11.5" font-family="monospace" font-weight="700">${r[0]}</text><text x="${W-46}" y="${y+17}" fill="var(--ink)" font-size="10.5" font-family="monospace" text-anchor="end">${r[1]}</text>`; });
+  document.getElementById('s3').innerHTML=A.svg(W,H,s,'정리');
+  document.getElementById('lab3').innerHTML=`입력을 걸렀으니, 이번엔 <b>내보내는 것</b>을 거를 차례 → <b style="color:var(--pink)">응답 모델</b>.`;
+})();
+</script>
+</body>
+</html>

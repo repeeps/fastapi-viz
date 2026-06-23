@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06 · 이벤트 루프 — FastAPI, 눈으로 보기</title>
+<link rel="stylesheet" href="shared/theme.css">
+<link rel="icon" type="image/svg+xml" href="shared/favicon.svg">
+<style>
+  .scene{cursor:default;}
+  .big{font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--ink); margin:8px 2px 0;}
+  .ctl{display:flex; align-items:center; gap:10px; margin:10px 0; flex-wrap:wrap;}
+  svg{display:block; width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:12px;}
+  .toggles{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .toggles button{font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);cursor:pointer}
+  .toggles button.on{color:#0b0e14;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topnav" id="topnav"></div>
+
+  <header>
+    <div class="tag" style="color:var(--hot)">PART C · async와 이벤트 루프 — CH 06 · 핵심</div>
+    <h1>이벤트 루프</h1>
+    <p class="intro">한 일꾼이 어떻게 여러 요청을 "번갈아" 할까요? 그 심장이 <b>이벤트 루프(event loop)</b>예요. 이름 그대로 <b>빙빙 도는 고리</b>인데, 매 바퀴 이렇게 해요 — <b>"지금 실행할 수 있는 일을 하나 꺼내 돌린다 → 그 일이 <code>await</code>(기다림)를 만나면 제쳐두고 → 다음 실행 가능한 일을 꺼낸다"</b>. 기다리던 일의 <b>I/O가 끝나면</b> 다시 "실행 가능" 목록에 올라오고요. 결정적으로 — <b>어느 순간에도 실제로 도는 일은 딱 하나</b>예요(일꾼이 한 명이니까). 여러 일이 "동시에 진행 중"으로 보이지만, 그건 <b>기다림이 겹쳐서</b>지 <b>동시에 실행</b>되는 게 아니에요. 이 구분 — <b>동시성(번갈아) ≠ 병렬성(진짜 같이)</b> — 이 이 챕터의 전부예요.</p>
+  </header>
+
+  <nav class="stepper" id="stepper">
+    <button data-s="0" class="active">00 · 도는 고리</button>
+    <button data-s="1">01 · 한 번에 하나만 실행</button>
+    <button data-s="2">02 · 동시성 ≠ 병렬성</button>
+    <button data-s="3">03 · 정리</button>
+  </nav>
+
+  <!-- STEP 0 -->
+  <section class="panel show" data-panel="0">
+    <span class="kicker" style="color:var(--hot)">Step 00 — The Loop</span>
+    <h2>꺼내 돌리고, await 만나면 제쳐두고, 다음</h2>
+    <p class="lead">이벤트 루프가 <b>실행 가능 목록</b>에서 일을 하나 꺼내 돌려요. ▶를 누르면 — R1을 돌리다 <code>await</code>(DB 기다림)를 만나면 <b>제쳐두고</b> R2를 꺼내고, R2도 await면 R3… 기다림이 끝난 일은 다시 목록으로 돌아와요. 이 "꺼내 → 돌리다 → 양보 → 다음"이 매 바퀴 반복돼요.</p>
+    <div class="ctl"><button class="btn play" id="go0">▶ 루프 돌리기</button> <button class="btn" id="rst0">↺ 리셋</button></div>
+    <div class="scene" id="s0"></div>
+    <p class="big" id="lab0"></p>
+    <p class="note" style="margin-top:6px">→ <code>await</code>가 <b>유일한 양보 지점</b>이에요. await가 없으면 그 일이 끝날 때까지 루프는 다음으로 못 넘어가요(→ CH 07).</p>
+  </section>
+
+  <!-- STEP 1 -->
+  <section class="panel" data-panel="1">
+    <span class="kicker" style="color:var(--q)">Step 01 — Only One Runs at a Time</span>
+    <h2>한 번에 실행되는 건 딱 하나</h2>
+    <p class="lead">3개 요청을 처리하는 타임라인이에요. ▶로 재생하며 <b>세로 재생선</b>이 지나는 순간을 보세요 — <b>꽉 찬 막대(실행)는 어느 순간에도 하나뿐</b>이고, <b>빗금 막대(기다림)는 여러 개가 겹쳐요</b>. 위 카운터가 "지금 실행 중 = 1, 기다리는 중 = N"을 알려줘요. 이게 "한 일꾼이 번갈아 한다"의 진짜 모습이에요.</p>
+    <div class="ctl"><button class="btn play" id="go1">▶ 재생</button> <button class="btn" id="rst1">↺ 리셋</button></div>
+    <div class="scene" id="s1"></div>
+    <p class="big" id="lab1"></p>
+    <p class="note" style="margin-top:6px">→ 실행 막대가 <b>절대 겹치지 않는다</b>는 점에 주목 — 일꾼(CPU)이 하나라 물리적으로 동시 실행이 불가능해요.</p>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="panel" data-panel="2">
+    <span class="kicker" style="color:var(--v)">Step 02 — Concurrency ≠ Parallelism</span>
+    <h2>동시성 ≠ 병렬성</h2>
+    <p class="lead">가장 헷갈리는 지점이에요. 두 그림을 비교하세요. <b>동시성(이벤트 루프)</b>은 <b>한 일꾼</b>이 여러 일을 <b>번갈아</b> — 실행은 늘 하나, 기다림만 겹쳐요. <b>병렬성</b>은 <b>일꾼이 여럿</b>(여러 CPU 코어/워커)이라 진짜로 <b>같은 순간에 여러 일이 실행</b>돼요. async는 <b>동시성</b>이지 병렬성이 아니에요 — 그래서 CPU 일을 두 배 빨리 계산하진 못해요(기다림을 메울 뿐). 진짜 병렬은 워커를 늘려야 하고요(→ CH 16).</p>
+    <div class="toggles" id="cp"></div>
+    <div class="scene" id="s2"></div>
+    <p class="big" id="lab2"></p>
+    <p class="note" style="margin-top:6px">→ 한 줄 요약: <b>동시성 = 번갈아(한 일꾼) · 병렬성 = 진짜 같이(여러 일꾼=워커/코어, CH 16)</b>. FastAPI의 async는 앞쪽.</p>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="panel" data-panel="3">
+    <span class="kicker" style="color:var(--good)">Step 03 — Takeaways</span>
+    <h2>정리 — 이벤트 루프</h2>
+    <p class="lead">이벤트 루프는 <b>실행 가능한 일을 하나씩 꺼내 돌리다, await에서 양보하고 다음으로</b> 넘어가는 고리예요. 어느 순간에도 <b>실행은 하나</b>, 겹치는 건 <b>기다림</b>뿐 — 동시성이지 병렬성이 아니에요. 그런데 이 우아한 구조엔 <b>치명적 약점</b>이 하나 있어요: 어떤 일이 <b>await 없이 오래 CPU를 붙잡으면</b>? 양보를 안 하니 <b>루프 전체가 멈춰요</b>. FastAPI 1순위 실수, 다음 챕터예요.</p>
+    <div class="scene" id="s3"></div>
+    <p class="big" id="lab3"></p>
+    <p class="note" style="margin-top:14px">→ 다음 → <a href="07-blocking.html" style="color:var(--q);font-weight:700">CH 07 · 루프를 막지 마라</a></p>
+  </section>
+
+  <p class="foot">// 코드 없는 직관 입문 · <a href="index.html">목차</a></p>
+</div>
+
+<script src="shared/lib.js"></script>
+<script src="shared/lib-api.js"></script>
+<script>
+VZ.mountTopnav('#topnav', '06 · 이벤트 루프');
+VZ.setupStepper();
+const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
+const REQC=['var(--q)','var(--v)','var(--pink)'];
+// 공통 스케줄: 3요청, 각 work .2 + wait 1.0 + work .2, CPU 인터리브
+function buildSchedule(){ const cpu=[], wait=[];
+  for(let r=0;r<3;r++){ cpu.push({lane:'이벤트 루프(CPU)',t0:r*0.2,dur:0.2,label:'R'+(r+1),kind:'run',color:REQC[r]}); wait.push({lane:'R'+(r+1),t0:0.2+r*0.2,dur:1.0,label:'await(기다림)',kind:'wait'}); cpu.push({lane:'이벤트 루프(CPU)',t0:1.2+r*0.2,dur:0.2,label:'R'+(r+1),kind:'run',color:REQC[r]}); }
+  return {cpu,wait}; }
+const SCHED=buildSchedule(), TOTAL=1.8;
+
+// ===== STEP 0: the loop cycle =====
+(function(){ const W=460,H=210; let cancel=null;
+  function render(p){ const now=p*TOTAL; let s='';
+    // 이벤트 루프 원 (중앙)
+    const cx=W/2, cy=80, rr=44;
+    s+=`<circle cx="${cx}" cy="${cy}" r="${rr}" fill="none" stroke="var(--hot)" stroke-width="2.5"/>`;
+    // 회전 표시
+    const ang=(now/TOTAL)*Math.PI*6; const dx=cx+Math.cos(ang)*rr, dy=cy+Math.sin(ang)*rr;
+    s+=`<circle cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="5" fill="var(--hot)"/>`;
+    s+=`<text x="${cx}" y="${cy-2}" fill="var(--hot)" font-size="12" font-family="monospace" text-anchor="middle" font-weight="700">이벤트</text><text x="${cx}" y="${cy+13}" fill="var(--hot)" font-size="12" font-family="monospace" text-anchor="middle" font-weight="700">루프</text>`;
+    // 현재 실행 중인 요청 찾기
+    let running=-1; SCHED.cpu.forEach(t=>{ if(now>=t.t0 && now<t.t0+t.dur) running=+t.label.slice(1)-1; });
+    // 세 요청 상태
+    for(let r=0;r<3;r++){ const x=40+r*150; const isRun=running===r;
+      // 상태: 실행/대기/완료/대기중
+      const w2=SCHED.cpu[r*2+1]; const done=now>=w2.t0+w2.dur;
+      const waiting = SCHED.wait[r]; const isWait = now>=waiting.t0 && now<waiting.t0+waiting.dur;
+      const st = done?'완료': isRun?'▶ 실행 중': isWait?'· 기다림(await)':'대기';
+      const c = done?'var(--good)': isRun?'var(--hot)': isWait?'var(--slate)':'var(--line)';
+      s+=A.box(x,150,120,42,'R'+(r+1),{color:c,sub:st,fs:12});
+      if(isRun) s+=A.edge(cx,cy+rr,x+60,150,{color:'var(--hot)',lw:1.6});
+    }
+    document.getElementById('s0').innerHTML=A.svg(W,H,s,'이벤트 루프 고리');
+    document.getElementById('lab0').innerHTML = now<0.02?'▶로 루프를 돌리세요.': running>=0?`루프가 <b style="color:var(--hot)">R${running+1}</b>을 실행 중 — await를 만나면 제쳐두고 다음을 꺼내요.`:'기다림 중인 일들의 I/O가 끝나길 기다렸다, 끝난 것부터 다시 꺼내요.';
+  }
+  document.getElementById('go0').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),3600,()=>render(1)); };
+  document.getElementById('rst0').onclick=()=>{ if(cancel)cancel(); render(0); };
+  render(0);
+})();
+
+// ===== STEP 1: only one runs =====
+(function(){ const W=460,H=180; let cancel=null;
+  function render(p){ const now=p*TOTAL; const tmax=1.9;
+    const all=SCHED.cpu.concat(SCHED.wait);
+    const vis=all.filter(t=>t.t0<now+0.001).map(t=>({...t,dur:Math.min(t.dur,now-t.t0)}));
+    let s=A.loop(W,H,['이벤트 루프(CPU)','R1','R2','R3'],vis,tmax,{playhead:now,tick:0.5,padL:96});
+    // 카운터
+    let running=0, waiting=0;
+    SCHED.cpu.forEach(t=>{ if(now>=t.t0 && now<t.t0+t.dur) running++; });
+    SCHED.wait.forEach(t=>{ if(now>=t.t0 && now<t.t0+t.dur) waiting++; });
+    s+=`<text x="${W-14}" y="13" fill="var(--ink)" font-size="10.5" font-family="monospace" text-anchor="end">실행 중 <tspan fill="var(--good)" font-weight="700">${running}</tspan> · 기다리는 중 <tspan fill="var(--slate)" font-weight="700">${waiting}</tspan></text>`;
+    document.getElementById('s1').innerHTML=A.svg(W,H,s,'한 번에 하나만 실행');
+    document.getElementById('lab1').innerHTML = now<0.02?'▶로 재생하세요.': `지금 <b style="color:var(--good)">실행 ${running}개</b>(항상 0이나 1) · <b style="color:var(--slate)">기다림 ${waiting}개</b>(여럿 겹침). 실행 막대는 겹치지 않아요.`;
+  }
+  document.getElementById('go1').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),3400,()=>render(1)); };
+  document.getElementById('rst1').onclick=()=>{ if(cancel)cancel(); render(0); };
+  render(0);
+})();
+
+// ===== STEP 2: concurrency vs parallelism =====
+(function(){ let mode=0, cancel=null; // 0 동시성, 1 병렬성
+  const MODES=[{k:'동시성 (이벤트 루프)',c:'var(--good)'},{k:'병렬성 (여러 워커)',c:'var(--hot)'}];
+  const cp=document.getElementById('cp'); cp.innerHTML=MODES.map((m,i)=>`<button data-i="${i}">${m.k}</button>`).join('');
+  function render(p){ const W=460,H=mode===0?170:130; const tmax=mode===0?1.3:0.6; const now=p*tmax; let s, lanes, tasks;
+    if(mode===0){ // 한 일꾼: 짧은 일+기다림을 인터리브(실행 비겹침, 대기 겹침)
+      lanes=['일꾼 1 (한 루프)','R1','R2','R3'];
+      tasks=[{lane:'일꾼 1 (한 루프)',t0:0,dur:0.15,label:'R1',kind:'run',color:REQC[0]},{lane:'R1',t0:0.15,dur:0.6,label:'대기',kind:'wait'},{lane:'일꾼 1 (한 루프)',t0:0.75,dur:0.15,label:'R1',kind:'run',color:REQC[0]},
+        {lane:'일꾼 1 (한 루프)',t0:0.15,dur:0.15,label:'R2',kind:'run',color:REQC[1]},{lane:'R2',t0:0.3,dur:0.6,label:'대기',kind:'wait'},{lane:'일꾼 1 (한 루프)',t0:0.9,dur:0.15,label:'R2',kind:'run',color:REQC[1]},
+        {lane:'일꾼 1 (한 루프)',t0:0.3,dur:0.15,label:'R3',kind:'run',color:REQC[2]},{lane:'R3',t0:0.45,dur:0.6,label:'대기',kind:'wait'},{lane:'일꾼 1 (한 루프)',t0:1.05,dur:0.15,label:'R3',kind:'run',color:REQC[2]}];
+    } else { // 세 일꾼: CPU 작업도 진짜 동시 실행(겹침)
+      lanes=['워커 1','워커 2','워커 3']; tasks=[{lane:'워커 1',t0:0,dur:0.4,label:'R1',kind:'run',color:REQC[0]},{lane:'워커 2',t0:0,dur:0.4,label:'R2',kind:'run',color:REQC[1]},{lane:'워커 3',t0:0,dur:0.4,label:'R3',kind:'run',color:REQC[2]}];
+    }
+    const vis=tasks.filter(t=>t.t0<now+0.001).map(t=>({...t,dur:Math.max(0,Math.min(t.dur,now-t.t0))}));
+    s=A.loop(W,H,lanes,vis,tmax,{playhead:now,tick:mode===0?0.3:0.2,padL:90});
+    s+=`<text x="${W-14}" y="13" fill="${MODES[mode].c}" font-size="10.5" font-family="monospace" text-anchor="end">${mode===0?'한 일꾼, 기다림 겹침':'세 일꾼, 실행 겹침'}</text>`;
+    document.getElementById('s2').innerHTML=A.svg(W,H,s,MODES[mode].k);
+    document.querySelectorAll('#cp button').forEach((b,i)=>{ const on=i===mode; b.classList.toggle('on',on); b.style.background=on?MODES[i].c:'var(--panel-2)'; b.style.color=on?'#0b0e14':'var(--muted)'; });
+    document.getElementById('lab2').innerHTML = mode===0
+      ? '<b style="color:var(--good)">동시성</b>: 한 일꾼이 번갈아 — <b>실행(꽉 찬 막대)은 겹치지 않고</b>, 기다림만 겹쳐요. 기다림 덕에 셋을 함께 진행.'
+      : '<b style="color:var(--hot)">병렬성</b>: 세 일꾼이 진짜 동시에 — <b>실행 막대가 겹쳐요</b>. 이게 진짜 "같이". async가 아니라 워커(CH16)의 몫.';
+  }
+  cp.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; mode=+b.dataset.i; if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),1600,()=>render(1)); });
+  function loop(){ cancel=VZ.LA.tween(p=>render(p),1800,()=>render(1)); } loop();
+})();
+
+// ===== STEP 3: takeaways =====
+(function(){ const W=460,H=140;
+  let s=`<text x="${W/2}" y="24" fill="var(--good)" font-size="13" font-family="monospace" text-anchor="middle" font-weight="700">이벤트 루프 = 꺼내 돌리고 await에서 양보</text>`;
+  const rows=[['실행','어느 순간에도 딱 하나','var(--good)'],['기다림','여럿이 겹침(동시 진행처럼)','var(--slate)'],['동시성≠병렬성','번갈아 ≠ 진짜 같이','var(--hot)']];
+  rows.forEach((r,i)=>{ const y=38+i*32; s+=`<rect x="30" y="${y}" width="${W-60}" height="26" rx="7" fill="var(--panel)" stroke="${r[2]}" stroke-width="1.1"/><text x="46" y="${y+17}" fill="${r[2]}" font-size="11.5" font-family="monospace" font-weight="700">${r[0]}</text><text x="${W-46}" y="${y+17}" fill="var(--ink)" font-size="10.5" font-family="monospace" text-anchor="end">${r[1]}</text>`; });
+  document.getElementById('s3').innerHTML=A.svg(W,H,s,'정리');
+  document.getElementById('lab3').innerHTML=`await 없이 CPU를 오래 붙잡으면? <b style="color:var(--drop)">루프 전체가 멈춰요</b> → 다음 챕터.`;
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0번 · 서버가 하는 일 — FastAPI, 눈으로 보기</title>
+<link rel="stylesheet" href="shared/theme.css">
+<link rel="icon" type="image/svg+xml" href="shared/favicon.svg">
+<style>
+  .scene{cursor:default;}
+  .big{font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--ink); margin:8px 2px 0;}
+  .ctl{display:flex; align-items:center; gap:10px; margin:10px 0; flex-wrap:wrap;}
+  svg{display:block; width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:12px;}
+  .stagebtns{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+  .stagebtns button{font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);cursor:pointer}
+  .stagebtns button.on{color:#0b0e14;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topnav" id="topnav"></div>
+
+  <header>
+    <div class="tag">PART 0 · 입문</div>
+    <h1>서버가 하는 일 — 요청 하나의 여정</h1>
+    <p class="intro">웹 앱을 쓰면 브라우저(또는 앱)가 서버에 <b>요청</b>을 보내고 <b>응답</b>을 받아요. 그 짧은 사이, 서버 안에서는 <b>보이지 않는 일</b>이 줄지어 일어나요 — 요청이 <b>어느 핸들러로 갈지 고르고</b>(라우팅), <b>입력이 올바른지 검사하고</b>(검증), 핸들러가 <b>필요로 하는 것을 채워주고</b>(의존성 주입), 진짜 일을 한 뒤(핸들러) <b>응답을 빚어 돌려보내요</b>. FastAPI는 이걸 <b>비동기(async)</b>로 처리해서 한 일꾼이 수천 요청을 번갈아 받아내죠. 이 0번에서 요청 하나의 전체 여정을 한눈에 깔고, 각 챕터가 그 한 구간을 확대해요. 문법이 아니라 <b>머릿속 그림</b>을 세우는 게 목표예요.</p>
+  </header>
+
+  <nav class="stepper" id="stepper">
+    <button data-s="0" class="active">00 · 요청의 여정</button>
+    <button data-s="1">01 · 각 단계가 하는 일</button>
+    <button data-s="2">02 · 보이지 않아서 어렵다</button>
+    <button data-s="3">03 · 코스맵</button>
+  </nav>
+
+  <!-- STEP 0 -->
+  <section class="panel show" data-panel="0">
+    <span class="kicker" style="color:var(--hot)">Step 00 — One Request's Journey</span>
+    <h2>요청이 들어와서 응답이 나가기까지</h2>
+    <p class="lead">▶를 누르면 요청 한 개(<b>POST /users</b>)가 서버로 들어와요. 맨 앞 <b>ASGI 서버</b>가 요청을 받아 <b>이벤트 루프</b>(한 일꾼이 여러 요청을 번갈아 처리하는 심장 — CH 05~08)에 태우고, 그 뒤 <b>라우팅 → 검증 → 의존성 → 핸들러 → 응답</b> 파이프라인을 차례로 지나 <b>201 응답</b>으로 나가요. 지금은 큰 그림만 — 각 단계의 "어떻게"는 이어지는 챕터에서 풀어요.</p>
+    <div class="ctl"><button class="btn play" id="go0">▶ 요청 보내기</button> <button class="btn" id="rst0">↺ 리셋</button></div>
+    <div class="scene" id="s0"></div>
+    <p class="big" id="lab0"></p>
+    <p class="note" style="margin-top:6px">→ <b>ASGI 서버</b>(uvicorn 등)는 "요청을 받아 이벤트 루프에 태우는 문지기"예요. FastAPI 코드는 그 위에서 돌아요.</p>
+  </section>
+
+  <!-- STEP 1 -->
+  <section class="panel" data-panel="1">
+    <span class="kicker" style="color:var(--q)">Step 01 — What Each Stage Does</span>
+    <h2>각 단계가 하는 일 — 그리고 왜 어려운가</h2>
+    <p class="lead">각 단계를 <b>눌러</b> 무슨 일을 하고 무엇이 까다로운지, 그리고 <b>어느 챕터</b>에서 배우는지 보세요. 서버의 어려움은 한 단계가 아니라 <b>전부가 맞물려야</b> 한다는 데 있어요 — 게다가 대부분 코드만 봐선 <b>안 보여요</b>.</p>
+    <div class="stagebtns" id="stb"></div>
+    <div class="scene" id="s1"></div>
+    <p class="big" id="lab1"></p>
+    <p class="note" style="margin-top:6px">→ "검증"의 422 차단, "의존성"의 트리 채우기처럼 — 각 단계가 곧 한 챕터(또는 PART)예요. (참고: 파이프라인 순서는 의존성→핸들러지만, async가 더 근본이라 <b>배우는 순서</b>는 async(C)를 먼저 둬요.)</p>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="panel" data-panel="2">
+    <span class="kicker" style="color:var(--v)">Step 02 — Invisible, So Hard</span>
+    <h2>보이지 않아서 어렵다 — 두 하이라이트</h2>
+    <p class="lead">서버가 헷갈리는 진짜 이유는 핵심 동작이 <b>눈에 안 보이기</b> 때문이에요. 그중 둘이 FastAPI의 심장이자 입문자가 가장 막히는 곳 — <b>async 이벤트 루프</b>(한 일꾼이 수천 요청을 어떻게 동시에?)와 <b>의존성 주입</b>(핸들러가 필요한 걸 어떻게 받지?). 이 트랙은 이 "보이지 않는 런타임"을 <b>움직이는 그림</b>으로 드러내는 데 가장 큰 비중을 둬요.</p>
+    <div class="scene" id="s2"></div>
+    <p class="big" id="lab2"></p>
+    <p class="note" style="margin-top:6px">→ <b style="color:var(--hot)">초록</b>=이 트랙이 깊게 파는 하이라이트, <b style="color:var(--muted)">회색</b>=기본기. 둘 다 결국 한 요청 안에서 맞물려요.</p>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="panel" data-panel="3">
+    <span class="kicker" style="color:var(--good)">Step 03 — Course Map</span>
+    <h2>코스맵 — 요청 여정에서 운영까지 16챕터</h2>
+    <p class="lead">전체 길이예요. <b>요청 여정</b>(A) → <b>입력·출력</b>(B) → <b>async</b>(C, 하이라이트) → <b>의존성</b>(D, 하이라이트) → <b>바깥 세계</b>(E) → <b>실전·운영</b>(F). 순서대로 따라오면 FastAPI 서버를 읽고 설계하는 머릿속 그림이 완성돼요.</p>
+    <div class="scene" id="s3"></div>
+    <p class="big" id="lab3"></p>
+    <p class="note" style="margin-top:14px">→ 첫 구간부터. 다음 → <a href="01-http.html" style="color:var(--q);font-weight:700">CH 01 · HTTP 요청·응답</a></p>
+  </section>
+
+  <p class="foot">// 코드 없는 직관 입문 · 요청 하나의 여정을 한눈에 · <a href="index.html">목차</a></p>
+</div>
+
+<script src="shared/lib.js"></script>
+<script src="shared/lib-api.js"></script>
+<script>
+VZ.mountTopnav('#topnav', '0번 · 입문');
+VZ.setupStepper();
+const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
+
+const STAGES=[
+  {k:'라우팅', c:'var(--q)', d:'요청의 메서드+경로를 보고 어느 핸들러로 보낼지 고르고, 경로/쿼리 값을 뽑아요.', hard:'경로가 겹치면 매칭 순서가 중요 — 구체적인 게 먼저여야 해요.', part:'CH 01·02'},
+  {k:'검증', c:'var(--v)', d:'들어온 JSON을 타입 있는 모델로 바꾸고, 안 맞으면 핸들러 도달 전에 422로 막아요.', hard:'어디서 왜 막혔는지 모르면 "분명 보냈는데 422"로 헤매요.', part:'CH 03·04'},
+  {k:'의존성', c:'var(--hot)', d:'핸들러가 필요로 하는 것(DB 세션·현재 사용자 등)을 프레임워크가 미리 채워줘요.', hard:'중첩·캐싱·정리(yield) 같은 보이지 않는 규칙이 많아요.', part:'CH 09·10·11'},
+  {k:'핸들러', c:'var(--good)', d:'진짜 일(DB 조회·계산)을 하는 내 함수. async면 await에서 다른 요청에 양보해요.', hard:'여기서 동기 블로킹을 하면 이벤트 루프 전체가 멈춰요(1순위 실수).', part:'CH 05~08'},
+  {k:'응답', c:'var(--pink)', d:'핸들러 결과를 응답 모델로 거르고 JSON으로 직렬화해 상태코드와 함께 돌려보내요.', hard:'내보내면 안 되는 필드(비밀번호)가 새지 않게 거름망이 필요해요.', part:'CH 04·15'},
+];
+
+// ===== STEP 0: request journey =====
+(function(){ const W=460,H=240; let cancel=null;
+  const stageNames=['라우팅','검증','의존성','핸들러','응답'];
+  function render(p){ let s='';
+    // 브라우저
+    s+=A.box(14,40,70,40,'브라우저',{color:'var(--muted)',fs:10});
+    // ASGI 문지기
+    const asgiOn = p>0.04;
+    s+=A.box(100,40,80,40,'ASGI 서버',{color:asgiOn?'var(--hot)':'var(--line)',sub:'문지기',fs:10,dim:!asgiOn});
+    // 이벤트 루프 표시 (ASGI가 태움)
+    s+=`<text x="140" y="98" fill="var(--hot)" font-size="8.5" font-family="monospace" text-anchor="middle">↓ 이벤트 루프에 태움</text>`;
+    // 파이프라인 스테이지 바
+    const stageF = clamp((p-0.12)/0.66, 0, 1); const activeIdx = Math.min(4, Math.floor(stageF*5));
+    s+=A.stageBar(14,118,W-28, stageNames.map((n,i)=>({label:n,color:STAGES[i].c})), p>0.9?5:activeIdx, {h:30});
+    // 요청 카드 / 응답
+    if(p<0.12){ const u=p/0.12; const cx=84+(100-84)*u; s+=A.packet(cx,60,{color:'var(--q)'}); }
+    else if(p<0.9){ s+=A.reqCard(110,165,200,'POST','/users',{sub:'body: {name, age}'}); }
+    else { s+=A.statusBadge(W/2,190,201,'Created'); s+=`<text x="${W/2}" y="220" fill="var(--good)" font-size="10" font-family="monospace" text-anchor="middle">→ 브라우저로 응답</text>`; }
+    document.getElementById('s0').innerHTML=A.svg(W,H,s,'요청의 여정');
+    let msg;
+    if(p<0.04) msg='멈춤 — ▶로 요청을 보내세요.';
+    else if(p<0.12) msg='<b style="color:var(--hot)">ASGI 서버</b>가 요청을 받아 이벤트 루프에 태워요.';
+    else if(p<0.9) msg=`<b style="color:${STAGES[activeIdx].c}">${stageNames[activeIdx]}</b> 단계 — ${STAGES[activeIdx].d}`;
+    else msg='<b style="color:var(--good)">201 Created</b> 응답이 브라우저로. 한 요청의 여정 끝!';
+    document.getElementById('lab0').innerHTML=msg;
+  }
+  document.getElementById('go0').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),4200,()=>render(1)); };
+  document.getElementById('rst0').onclick=()=>{ if(cancel)cancel(); render(0); };
+  render(0);
+})();
+
+// ===== STEP 1: stage explainer =====
+(function(){ let sel=0;
+  const stb=document.getElementById('stb');
+  stb.innerHTML=STAGES.map((s,i)=>`<button data-i="${i}" style="border-color:${s.c}">${i+1}. ${s.k}</button>`).join('');
+  function render(){ const W=460,H=150; const s=STAGES[sel]; let g='';
+    g+=`<rect x="14" y="14" width="${W-28}" height="${H-28}" rx="12" fill="var(--panel-2)" stroke="${s.c}"/>`;
+    g+=`<text x="34" y="44" fill="${s.c}" font-size="18" font-family="monospace" font-weight="700">${sel+1}. ${s.k}</text>`;
+    g+=`<foreignObject x="34" y="56" width="${W-68}" height="84"><div xmlns="http://www.w3.org/1999/xhtml" style="font-family:monospace;font-size:12.5px;line-height:1.55;color:#cdd6f4"><div>${s.d}</div><div style="color:var(--hot);margin-top:6px">⚠ ${s.hard}</div><div style="color:var(--muted);margin-top:6px">→ ${s.part}</div></div></foreignObject>`;
+    document.getElementById('s1').innerHTML=A.svg(W,H,g,s.k+' 설명');
+    document.querySelectorAll('#stb button').forEach((b,i)=>{ const on=i===sel; b.classList.toggle('on',on); b.style.background=on?STAGES[i].c:'var(--panel-2)'; b.style.color=on?'#0b0e14':'var(--muted)'; });
+    document.getElementById('lab1').innerHTML=`다섯 단계가 <b>모두 맞물려야</b> 해요 — 어느 하나만 어긋나도 "왜 안 되지?"가 시작돼요.`;
+  }
+  stb.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; sel=+b.dataset.i; render(); });
+  render();
+})();
+
+// ===== STEP 2: invisible runtime / highlights =====
+(function(){ const W=460,H=230;
+  const rows=[
+    ['요청 → 핸들러 매칭','라우팅', false],
+    ['입력 검증·직렬화','Pydantic', false],
+    ['★ async 이벤트 루프','이 트랙이 깊게', true],
+    ['★ 의존성 주입(DI)','이 트랙이 깊게', true],
+    ['DB 세션·커넥션 풀','바깥 세계', false],
+    ['인증·미들웨어·배포','실전·운영', false],
+  ];
+  let s=`<text x="${W/2}" y="22" fill="var(--ink)" font-size="13" font-family="monospace" text-anchor="middle" font-weight="700">보이지 않는 런타임을 드러낸다</text>`;
+  rows.forEach((r,i)=>{ const y=36+i*30; const c=r[2]?'var(--good)':'var(--muted)';
+    s+=`<rect x="20" y="${y}" width="${W-40}" height="26" rx="6" fill="${r[2]?'rgba(110,231,183,.10)':'var(--panel-2)'}" stroke="${c}" stroke-width="${r[2]?1.5:1}"/>`;
+    s+=`<text x="32" y="${y+17}" fill="${r[2]?'var(--good)':'var(--ink)'}" font-size="12" font-family="monospace" ${r[2]?'font-weight="700"':''}>${r[0]}</text>`;
+    s+=`<text x="${W-32}" y="${y+17}" fill="${c}" font-size="10" font-family="monospace" text-anchor="end">${r[1]}</text>`; });
+  document.getElementById('s2').innerHTML=A.svg(W,H,s,'하이라이트');
+  document.getElementById('lab2').innerHTML=`<b style="color:var(--good)">async</b>와 <b style="color:var(--good)">DI</b>는 코드만 봐선 가장 안 보여요 — 그래서 가장 크게 그릴게요.`;
+})();
+
+// ===== STEP 3: course map =====
+(function(){ const W=460;
+  const parts=[
+    ['A','요청의 여정','var(--q)',['01 HTTP','02 라우팅']],
+    ['B','입력·출력','var(--v)',['03 검증','04 응답모델']],
+    ['C','async ★','var(--hot)',['05 동기vs비동기','06 이벤트루프','07 막지마','08 동시·백그라운드']],
+    ['D','의존성주입 ★','var(--hot)',['09 Depends','10 중첩·캐싱','11 yield']],
+    ['E','바깥 세계','var(--blue)',['12 커넥션풀','13 N+1','14 인증']],
+    ['F','실전·운영','var(--pink)',['15 미들웨어','16 배포·워커']],
+  ];
+  let y=14, s='';
+  parts.forEach(pt=>{ s+=`<text x="16" y="${y+14}" fill="${pt[2]}" font-size="13" font-family="monospace" font-weight="700">${pt[1]}</text><text x="120" y="${y+14}" fill="var(--faint)" font-size="10" font-family="monospace">PART ${pt[0]}</text>`;
+    pt[3].forEach((c,i)=>{ const cw=(W-150)/2; const cx=140+(i%2)*cw, cy=y+Math.floor(i/2)*22; s+=`<rect x="${cx}" y="${cy}" width="${cw-5}" height="20" rx="5" fill="var(--panel-2)" stroke="${pt[2]}" stroke-width="0.9"/><text x="${cx+6}" y="${cy+14}" fill="var(--muted)" font-size="9.5" font-family="monospace">${c}</text>`; });
+    y+= 22*Math.ceil(pt[3].length/2) + 14; });
+  document.getElementById('s3').innerHTML=A.svg(W,y,s,'코스맵');
+  document.getElementById('lab3').innerHTML=`여섯 구간 = 16챕터. <b style="color:var(--hot)">async(C)·의존성(D)</b>가 가장 두꺼운 핵심이에요.`;
+})();
+</script>
+</body>
+</html>

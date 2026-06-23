@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05 · 동기 vs 비동기 — FastAPI, 눈으로 보기</title>
+<link rel="stylesheet" href="shared/theme.css">
+<link rel="icon" type="image/svg+xml" href="shared/favicon.svg">
+<style>
+  .scene{cursor:default;}
+  .big{font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--ink); margin:8px 2px 0;}
+  .ctl{display:flex; align-items:center; gap:10px; margin:10px 0; flex-wrap:wrap;}
+  .ctl label{font-size:13px; color:var(--muted);}
+  svg{display:block; width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:12px;}
+  .toggles{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .toggles button{font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);cursor:pointer}
+  .toggles button.on{color:#0b0e14;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topnav" id="topnav"></div>
+
+  <header>
+    <div class="tag" style="color:var(--hot)">PART C · async와 이벤트 루프 — CH 05 · 핵심</div>
+    <h1>동기 vs 비동기</h1>
+    <p class="intro">웹 서버의 일은 대부분 <b>"보내놓고 기다리기"</b>예요 — DB에 쿼리를 날리고 결과를 <b>기다리고</b>, 다른 API를 부르고 응답을 <b>기다리죠</b>. 이 기다리는 동안 CPU는 <b>놀고 있어요</b>. <b>동기(sync)</b> 방식은 한 요청이 기다리는 내내 <b>멈춰 서서</b> 아무것도 안 해요 — 다음 요청은 줄 서서 기다리고요. <b>비동기(async)</b> 방식은 기다리는 동안 <b>다른 요청의 일을 해요</b> — 식당 직원이 빵을 굽는 동안(오븐=기다림) 다음 손님 주문을 받듯이. 핵심 표시가 <code>await</code>예요: "여기서 기다리니, 그동안 다른 일 해도 돼"라는 양보 신호죠. 그래서 같은 요청들이라도 <b>총 처리 시간이 확 달라져요</b> — 기다림이 많을수록요.</p>
+  </header>
+
+  <nav class="stepper" id="stepper">
+    <button data-s="0" class="active">00 · 기다림의 정체</button>
+    <button data-s="1">01 · 같은 3요청, 다른 시간</button>
+    <button data-s="2">02 · async가 언제 이득인가</button>
+    <button data-s="3">03 · 정리</button>
+  </nav>
+
+  <!-- STEP 0 -->
+  <section class="panel show" data-panel="0">
+    <span class="kicker" style="color:var(--hot)">Step 00 — What "Waiting" Means</span>
+    <h2>한 요청의 시간 — 대부분은 기다림</h2>
+    <p class="lead">요청 하나가 DB를 부르는 모습이에요. <b>잠깐 일하고</b>(쿼리 준비) → <b>오래 기다리고</b>(DB가 답할 때까지, CPU는 놀아요) → <b>잠깐 일해요</b>(결과 처리). ▶로 재생하면 <b>빗금 친 부분(기다림)</b>이 얼마나 큰지 보여요. 동기는 이 기다림 동안 <b>아무것도 못 하고</b>, 비동기는 <b>그 틈에 다른 요청을 처리</b>할 수 있어요 — 그게 다음 스텝의 핵심이에요.</p>
+    <div class="ctl"><button class="btn play" id="go0">▶ 한 요청 재생</button> <button class="btn" id="rst0">↺ 리셋</button></div>
+    <div class="scene" id="s0"></div>
+    <p class="big" id="lab0"></p>
+    <p class="note" style="margin-top:6px">→ <b>꽉 찬 막대 = CPU가 실제로 일함</b>, <b>빗금 막대 = 기다림(I/O, CPU 놀음)</b>. 이 구분이 이 PART 내내 핵심이에요.</p>
+  </section>
+
+  <!-- STEP 1 -->
+  <section class="panel" data-panel="1">
+    <span class="kicker" style="color:var(--q)">Step 01 — Same 3 Requests, Different Time</span>
+    <h2>같은 요청 3개 — 동기와 비동기의 총 시간</h2>
+    <p class="lead">똑같은 요청 3개(각각 잠깐 일 + 길게 기다림 + 잠깐 일)를 두 방식으로 처리해요. <b>동기</b>는 하나가 <b>완전히 끝나야</b> 다음을 시작 — 기다림까지 직렬로 쌓여요. <b>비동기</b>는 A가 기다리는 동안 B·C의 일을 해서 <b>기다림이 겹쳐</b> 총 시간이 확 줄어요. 모드를 바꿔 <b>총 소요 시간</b>을 비교하세요.</p>
+    <div class="toggles" id="md"></div>
+    <div class="ctl"><button class="btn play" id="go1">▶ 재생</button></div>
+    <div class="scene" id="s1"></div>
+    <p class="big" id="lab1"></p>
+    <p class="note" style="margin-top:6px">→ <b>실행(꽉 찬 막대)은 어느 순간에도 하나뿐</b> — 일꾼(CPU)은 한 명이니까요. 줄어든 건 "기다림이 겹쳐서"예요(다음 챕터에서 깊이).</p>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="panel" data-panel="2">
+    <span class="kicker" style="color:var(--v)">Step 02 — When Async Helps</span>
+    <h2>async는 "기다림"이 있을 때만 이득</h2>
+    <p class="lead">한 요청에서 <b>기다림(I/O)</b>과 <b>실제 일(CPU)</b>의 비율을 슬라이더로 바꿔보세요. <b>기다림이 많을수록</b>(DB·외부 API 호출 위주) async가 크게 이득이에요 — 그 틈에 다른 요청을 처리하니까. 반대로 <b>CPU 일만 가득</b>하면(무거운 계산) 양보할 틈이 없어 async가 <b>거의 도움 안 돼요</b>. 웹 서버 일은 대부분 기다림이라 async가 잘 맞는 거죠.</p>
+    <div class="ctl"><label>한 요청 중 기다림(I/O) 비율 <span id="ioL" style="color:var(--hot)">80%</span></label><input type="range" id="io" min="0" max="100" step="10" value="80" style="flex:1"></div>
+    <div class="scene" id="s2"></div>
+    <p class="big" id="lab2"></p>
+    <p class="note" style="margin-top:6px">→ "CPU 일만 가득한 요청"을 async에 넣고 잘못 다루면 오히려 전체가 멈춰요 — 그 함정이 <a href="07-blocking.html" style="color:var(--q)">CH 07</a>.</p>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="panel" data-panel="3">
+    <span class="kicker" style="color:var(--good)">Step 03 — Takeaways</span>
+    <h2>정리 — 동기 vs 비동기</h2>
+    <p class="lead">서버 일은 대부분 <b>기다림</b>이고, 동기는 그 기다림에 <b>멈춰 서지만</b> 비동기는 <b>그 틈에 다른 요청</b>을 처리해요. <code>await</code>가 "여기서 기다리니 양보할게"라는 신호죠. 그래서 기다림이 많을수록 비동기가 같은 요청들을 <b>훨씬 빨리</b> 처리해요. 그런데 — 한 일꾼이 어떻게 여러 요청을 "번갈아" 하는 걸까요? 그 심장이 <b>이벤트 루프</b>예요.</p>
+    <div class="scene" id="s3"></div>
+    <p class="big" id="lab3"></p>
+    <p class="note" style="margin-top:14px">→ 다음 → <a href="06-event-loop.html" style="color:var(--q);font-weight:700">CH 06 · 이벤트 루프</a></p>
+  </section>
+
+  <p class="foot">// 코드 없는 직관 입문 · <a href="index.html">목차</a></p>
+</div>
+
+<script src="shared/lib.js"></script>
+<script src="shared/lib-api.js"></script>
+<script>
+VZ.mountTopnav('#topnav', '05 · 동기 vs 비동기');
+VZ.setupStepper();
+const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
+
+// ===== STEP 0: one request anatomy =====
+(function(){ const W=460,H=130; let cancel=null; const tmax=1.4;
+  function render(p){ const now=p*tmax;
+    const tasks=[{lane:'요청',t0:0,dur:0.2,label:'준비',kind:'run',color:'var(--good)'},{lane:'요청',t0:0.2,dur:1.0,label:'DB 기다림',kind:'wait'},{lane:'요청',t0:1.2,dur:0.2,label:'처리',kind:'run',color:'var(--good)'}];
+    const vis=tasks.filter(t=>t.t0<now+0.001).map(t=>({...t,dur:Math.min(t.dur,now-t.t0)}));
+    let s=A.loop(W,H,['요청'],vis,tmax,{playhead:now,tick:0.35,padL:54});
+    document.getElementById('s0').innerHTML=A.svg(W,H,s,'한 요청의 시간');
+    document.getElementById('lab0').innerHTML = now<0.2?'잠깐 <b style="color:var(--good)">일해요</b>(쿼리 준비).': now<1.2?'<b>기다리는 중</b>(빗금) — DB 응답 대기, CPU는 놀아요. 이 틈이 기회!':'결과를 잠깐 <b style="color:var(--good)">처리</b>하고 끝. 시간의 대부분이 <b>기다림</b>이었죠.';
+  }
+  document.getElementById('go0').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),2400,()=>render(1)); };
+  document.getElementById('rst0').onclick=()=>{ if(cancel)cancel(); render(0); };
+  render(0);
+})();
+
+// ===== STEP 1: sync vs async timeline =====
+(function(){ let mode=0, cancel=null; const W=460; // 0 sync, 1 async
+  const MODES=[{k:'동기 (sync)',c:'var(--slate)'},{k:'비동기 (async)',c:'var(--good)'}];
+  const md=document.getElementById('md'); md.innerHTML=MODES.map((m,i)=>`<button data-i="${i}">${m.k}</button>`).join('');
+  const REQC=['var(--q)','var(--v)','var(--pink)'];
+  // 동기: 각 요청 [work .2, wait 1.0, work .2] 직렬 → 4.2
+  const syncTasks=[]; let t=0; for(let r=0;r<3;r++){ syncTasks.push({lane:'일꾼(CPU)',t0:t,dur:0.2,label:'R'+(r+1),kind:'run',color:REQC[r]}); syncTasks.push({lane:'일꾼(CPU)',t0:t+0.2,dur:1.0,label:'대기',kind:'wait'}); syncTasks.push({lane:'일꾼(CPU)',t0:t+1.2,dur:0.2,label:'R'+(r+1),kind:'run',color:REQC[r]}); t+=1.4; }
+  const SYNC_TOTAL=t; // 4.2
+  // 비동기: CPU에 work 인터리브, 각 요청 wait는 자기 레인
+  const asyncCpu=[]; const asyncWait=[];
+  for(let r=0;r<3;r++){ asyncCpu.push({lane:'일꾼(CPU)',t0:r*0.2,dur:0.2,label:'R'+(r+1),kind:'run',color:REQC[r]}); asyncWait.push({lane:'요청'+(r+1),t0:0.2+r*0.2,dur:1.0,label:'대기',kind:'wait'}); asyncCpu.push({lane:'일꾼(CPU)',t0:1.2+r*0.2,dur:0.2,label:'R'+(r+1),kind:'run',color:REQC[r]}); }
+  const ASYNC_TOTAL=1.8;
+  function render(p){ let s, total, lanes, tasks;
+    if(mode===0){ total=SYNC_TOTAL; lanes=['일꾼(CPU)']; tasks=syncTasks; }
+    else { total=ASYNC_TOTAL; lanes=['일꾼(CPU)','요청1','요청2','요청3']; tasks=asyncCpu.concat(asyncWait); }
+    const tmax=4.4; const now=p*total;
+    const H = mode===0?110:160;
+    const vis=tasks.filter(t=>t.t0<now+0.001).map(t=>({...t,dur:Math.min(t.dur,now-t.t0)}));
+    s=A.loop(W,H,lanes,vis,tmax,{playhead:now,tick:1,padL:64});
+    s+=`<text x="${W-14}" y="13" fill="${mode?'var(--good)':'var(--slate)'}" font-size="11" font-family="monospace" text-anchor="end" font-weight="700">총 ${(now).toFixed(1)}s${now>=total-0.01?` (완료 ${total.toFixed(1)}s)`:''}</text>`;
+    document.getElementById('s1').innerHTML=A.svg(W,H,s,MODES[mode].k);
+    document.querySelectorAll('#md button').forEach((b,i)=>{ const on=i===mode; b.classList.toggle('on',on); b.style.background=on?(i?'var(--good)':'var(--slate)'):'var(--panel-2)'; b.style.color=on?'#0b0e14':'var(--muted)'; });
+    document.getElementById('lab1').innerHTML = mode===0
+      ? `<b style="color:var(--slate)">동기</b>: 기다림까지 직렬로 쌓여 <b>총 ${SYNC_TOTAL.toFixed(1)}s</b>. R1이 다 끝나야 R2 시작.`
+      : `<b style="color:var(--good)">비동기</b>: 기다림이 겹쳐 <b>총 ${ASYNC_TOTAL.toFixed(1)}s</b>(동기의 절반 이하!). 실행 막대는 여전히 한 번에 하나뿐.`;
+  }
+  md.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; mode=+b.dataset.i; if(cancel)cancel(); render(1); });
+  document.getElementById('go1').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),3000,()=>render(1)); };
+  render(1);
+})();
+
+// ===== STEP 2: when async helps (I/O ratio) =====
+(function(){ const W=460,H=170; let io=0.8;
+  const ioEl=document.getElementById('io'), ioL=document.getElementById('ioL');
+  ioEl.oninput=()=>{ io=+ioEl.value/100; ioL.textContent=ioEl.value+'%'; render(); };
+  function render(){ const work=1-io; // 한 요청: work(CPU) + io(wait), 합=1
+    // 3요청. 동기총 = 3*1 = 3. 비동기총 = 3*work(겹칠수없는 CPU) + max(io) 대략 = 3*work + io (마지막 대기)
+    const syncT=3*1; const asyncT=3*work + io; // 근사
+    const speedup=syncT/asyncT;
+    let s='';
+    // 막대 비교
+    s+=`<text x="20" y="34" fill="var(--slate)" font-size="11" font-family="monospace">동기</text>`;
+    s+=`<rect x="80" y="22" width="${(syncT/3.5*(W-110)).toFixed(0)}" height="20" rx="4" fill="var(--slate)" opacity="0.8"/>`;
+    s+=`<text x="${80+syncT/3.5*(W-110)+6}" y="37" fill="var(--muted)" font-size="10" font-family="monospace">${syncT.toFixed(1)}s</text>`;
+    s+=`<text x="20" y="80" fill="var(--good)" font-size="11" font-family="monospace">비동기</text>`;
+    s+=`<rect x="80" y="68" width="${(asyncT/3.5*(W-110)).toFixed(0)}" height="20" rx="4" fill="var(--good)" opacity="0.9"/>`;
+    s+=`<text x="${80+asyncT/3.5*(W-110)+6}" y="83" fill="var(--muted)" font-size="10" font-family="monospace">${asyncT.toFixed(1)}s</text>`;
+    // 한 요청 구성 막대
+    s+=`<text x="20" y="124" fill="var(--muted)" font-size="10" font-family="monospace">한 요청:</text>`;
+    s+=`<rect x="80" y="112" width="${(work*(W-110)).toFixed(0)}" height="18" rx="3" fill="var(--good)"/>`;
+    s+=`<rect x="${80+work*(W-110)}" y="112" width="${(io*(W-110)).toFixed(0)}" height="18" rx="3" fill="url(#apihatch)" stroke="var(--slate)" stroke-dasharray="3 2"/>`;
+    s+=`<defs><pattern id="apihatch" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="6" stroke="var(--slate)" stroke-width="2" opacity="0.5"/></pattern></defs>`;
+    s+=`<text x="${W/2}" y="152" fill="${speedup>1.6?'var(--good)':speedup>1.15?'var(--hot)':'var(--drop)'}" font-size="12" font-family="monospace" text-anchor="middle" font-weight="700">속도 향상 ×${speedup.toFixed(1)}</text>`;
+    document.getElementById('s2').innerHTML=A.svg(W,H,s,'async 이득');
+    document.getElementById('lab2').innerHTML = io>=0.7?'<b style="color:var(--good)">기다림이 많아요</b> — async가 그 틈을 메워 크게 이득(웹 서버의 전형).': io<=0.2?'<b style="color:var(--drop)">CPU 일만 가득</b> — 양보할 틈이 없어 async가 거의 무의미.':'기다림이 적당 — async 이득도 적당해요.';
+  }
+  render();
+})();
+
+// ===== STEP 3: takeaways =====
+(function(){ const W=460,H=140;
+  let s=`<text x="${W/2}" y="24" fill="var(--good)" font-size="13" font-family="monospace" text-anchor="middle" font-weight="700">async = 기다리는 틈에 다른 요청을</text>`;
+  const rows=[['동기','기다림에 멈춰 섬 — 직렬','var(--slate)'],['비동기','기다림 겹침 — await로 양보','var(--good)'],['이득 조건','기다림(I/O)이 많을 때','var(--hot)']];
+  rows.forEach((r,i)=>{ const y=38+i*32; s+=`<rect x="30" y="${y}" width="${W-60}" height="26" rx="7" fill="var(--panel)" stroke="${r[2]}" stroke-width="1.1"/><text x="46" y="${y+17}" fill="${r[2]}" font-size="11.5" font-family="monospace" font-weight="700">${r[0]}</text><text x="${W-46}" y="${y+17}" fill="var(--ink)" font-size="10.5" font-family="monospace" text-anchor="end">${r[1]}</text>`; });
+  document.getElementById('s3').innerHTML=A.svg(W,H,s,'정리');
+  document.getElementById('lab3').innerHTML=`한 일꾼이 어떻게 "번갈아" 할까? 그 심장 → <b style="color:var(--hot)">이벤트 루프</b>.`;
+})();
+</script>
+</body>
+</html>

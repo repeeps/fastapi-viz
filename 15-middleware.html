@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>15 · 미들웨어·에러 처리 — FastAPI, 눈으로 보기</title>
+<link rel="stylesheet" href="shared/theme.css">
+<link rel="icon" type="image/svg+xml" href="shared/favicon.svg">
+<style>
+  .scene{cursor:default;}
+  .big{font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--ink); margin:8px 2px 0;}
+  .ctl{display:flex; align-items:center; gap:10px; margin:10px 0; flex-wrap:wrap;}
+  svg{display:block; width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:12px;}
+  .toggles{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .toggles button{font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);cursor:pointer}
+  .toggles button.on{color:#0b0e14;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topnav" id="topnav"></div>
+
+  <header>
+    <div class="tag" style="color:var(--pink)">PART F · 실전·운영 — CH 15</div>
+    <h1>미들웨어·에러 처리</h1>
+    <p class="intro">모든 요청에 공통으로 해야 할 일이 있어요 — 접속 기록 남기기, 처리 시간 재기, CORS 헤더 붙이기 같은 것들. 이걸 핸들러마다 적으면 중복이니, <b>미들웨어(middleware)</b>로 한 번에 감싸요. 미들웨어는 <b>양파 껍질</b>처럼 핸들러를 둘러싸요 — 요청은 바깥 껍질부터 <b>안으로</b> 통과해 핸들러에 닿고, 응답은 핸들러에서 나와 <b>같은 껍질을 거꾸로</b> 빠져나가요. 그래서 각 미들웨어는 요청을 <b>들어갈 때</b> 한 번, 응답을 <b>나올 때</b> 한 번, <b>양쪽</b>에서 손댈 수 있죠. 순서가 중요해요 — 바깥 껍질이 안쪽을 감싸니까요. 또 하나, 핸들러가 <b>에러로 터지면</b> 그냥 두면 흉한 500과 스택이 노출돼요. <b>예외 핸들러</b>를 두면 그 에러를 잡아 <b>깔끔한 JSON 응답</b>(예: 404 "없음")으로 바꿔줘요.</p>
+  </header>
+
+  <nav class="stepper" id="stepper">
+    <button data-s="0" class="active">00 · 양파 껍질</button>
+    <button data-s="1">01 · 들어가며·나오며</button>
+    <button data-s="2">02 · 에러를 깔끔하게</button>
+    <button data-s="3">03 · 정리</button>
+  </nav>
+
+  <!-- STEP 0 -->
+  <section class="panel show" data-panel="0">
+    <span class="kicker" style="color:var(--hot)">Step 00 — The Onion</span>
+    <h2>핸들러를 감싸는 껍질들</h2>
+    <p class="lead">미들웨어 세 겹(<b>CORS · 로깅 · 타이밍</b>)이 핸들러를 양파처럼 감싸요. ▶를 누르면 요청이 <b>바깥부터 안으로</b> 껍질을 하나씩 통과해 핸들러에 닿고, 응답이 다시 <b>안에서 바깥으로</b> 같은 껍질을 거꾸로 빠져나가요. 각 껍질은 요청·응답을 <b>양쪽에서</b> 볼 수 있어요.</p>
+    <div class="ctl"><button class="btn play" id="go0">▶ 통과</button> <button class="btn" id="rst0">↺ 리셋</button></div>
+    <div class="scene" id="s0"></div>
+    <p class="big" id="lab0"></p>
+    <p class="note" style="margin-top:6px">→ 들어갈 때 순서가 바깥→안이면, 나올 때는 정확히 그 <b>역순</b>이에요(가장 마지막에 들어간 게 가장 먼저 나옴).</p>
+  </section>
+
+  <!-- STEP 1 -->
+  <section class="panel" data-panel="1">
+    <span class="kicker" style="color:var(--q)">Step 01 — On the Way In & Out</span>
+    <h2>각 미들웨어는 양쪽에서 손댄다</h2>
+    <p class="lead">한 요청이 껍질을 지나는 <b>전체 경로</b>예요. 각 미들웨어는 <b>들어갈 때</b>(요청을 보고/기록) 한 번, 핸들러를 거쳐 <b>나올 때</b>(응답에 헤더 추가 등) 한 번 — 같은 미들웨어가 <b>두 지점</b>에서 등장하죠. 예: 타이밍 미들웨어는 들어갈 때 시계를 켜고, 나올 때 멈춰 <b>처리 시간</b>을 응답 헤더에 적어요. 순서를 바꾸면 누가 누구를 감싸는지가 달라져요.</p>
+    <div class="scene" id="s1"></div>
+    <p class="big" id="lab1"></p>
+    <p class="note" style="margin-top:6px">→ 그래서 "가장 바깥" 미들웨어가 가장 먼저 요청을 보고 가장 나중에 응답을 봐요 — 전체를 감싸니까요.</p>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="panel" data-panel="2">
+    <span class="kicker" style="color:var(--v)">Step 02 — Clean Errors</span>
+    <h2>에러를 깔끔한 응답으로</h2>
+    <p class="lead">핸들러가 <b>에러로 터졌을 때</b>를 비교하세요. <b>핸들러 없음</b>: 흉한 <b>500</b>과 스택 추적이 그대로 노출돼요(사용자도 당황, 보안에도 나쁨). <b>예외 핸들러 있음</b>: 그 에러를 잡아 <b>깔끔한 JSON</b>(예: 404 "주문을 찾을 수 없습니다")으로 바꿔 돌려줘요. 예상되는 에러는 핸들러 안에서 <code>raise HTTPException</code>으로 던지고, 공통 처리는 예외 핸들러에 모아요.</p>
+    <div class="toggles" id="eh"></div>
+    <div class="scene" id="s2"></div>
+    <p class="big" id="lab2"></p>
+    <p class="note" style="margin-top:6px">→ 사용자에겐 깔끔한 메시지를, 로그엔 자세한 스택을 — 둘을 분리하는 게 예외 핸들러의 역할이에요.</p>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="panel" data-panel="3">
+    <span class="kicker" style="color:var(--good)">Step 03 — Takeaways</span>
+    <h2>정리 — 미들웨어·에러</h2>
+    <p class="lead">미들웨어는 핸들러를 <b>양파처럼 감싸</b> 모든 요청·응답을 <b>양쪽에서</b> 공통 처리해요(로깅·CORS·타이밍). 바깥 껍질이 전체를 감싸니 <b>순서</b>가 중요하죠. 예외 핸들러는 터진 에러를 잡아 <b>깔끔한 응답</b>으로 바꿔주고요. 이제 마지막 한 걸음 — 이 모든 게 도는 서버를 실제로 <b>어떻게 띄우고</b>, 트래픽이 늘면 <b>무엇을 늘려야</b> 하는지(워커 vs async). 배포의 세계로 마무리해요.</p>
+    <div class="scene" id="s3"></div>
+    <p class="big" id="lab3"></p>
+    <p class="note" style="margin-top:14px">→ 다음 → <a href="16-deploy.html" style="color:var(--q);font-weight:700">CH 16 · 배포와 워커</a></p>
+  </section>
+
+  <p class="foot">// 코드 없는 직관 입문 · <a href="index.html">목차</a></p>
+</div>
+
+<script src="shared/lib.js"></script>
+<script src="shared/lib-api.js"></script>
+<script>
+VZ.mountTopnav('#topnav', '15 · 미들웨어');
+VZ.setupStepper();
+const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
+const LAYERS=[{label:'CORS',color:'var(--q)'},{label:'로깅',color:'var(--pink)'},{label:'타이밍',color:'var(--hot)'}];
+
+// ===== STEP 0: onion =====
+(function(){ const W=460,H=220; let cancel=null;
+  function render(p){ let s=''; const cx=W/2, cy=110;
+    // p: 0~0.5 들어감(바깥→안), 0.5~1 나옴(안→바깥)
+    let activeIdx, dir;
+    if(p<0.5){ activeIdx=Math.min(LAYERS.length, Math.floor(p/0.5*(LAYERS.length+1))); dir=1; }
+    else { activeIdx=LAYERS.length-Math.floor((p-0.5)/0.5*(LAYERS.length+1)); dir=-1; }
+    activeIdx=clamp(activeIdx,0,LAYERS.length);
+    const ai = activeIdx>=LAYERS.length? -1 : activeIdx; // 핸들러면 -1
+    s+=A.onion(cx,cy,LAYERS,{activeIdx:(p>=0.45&&p<=0.55)?-1:ai,step:30,core:'핸들러'});
+    // 진행 표시
+    s+=`<text x="${cx}" y="200" fill="var(--muted)" font-size="10" font-family="monospace" text-anchor="middle">${p<0.5?'요청: 바깥 → 안 ▶':'응답: 안 → 바깥 ◀'}</text>`;
+    document.getElementById('s0').innerHTML=A.svg(W,H,s,'양파 껍질');
+    const outIdx = clamp(activeIdx>=LAYERS.length?LAYERS.length-1:activeIdx,0,LAYERS.length-1);
+    document.getElementById('lab0').innerHTML = p<0.02?'▶로 통과시키세요.': (p>=0.45&&p<=0.55)?'<b style="color:var(--good)">핸들러</b> 도착(가장 안쪽)! 이제 응답이 거꾸로 나가요.': p<0.5?`요청이 <b>${LAYERS[clamp(ai,0,2)].label}</b> 껍질을 통과 중(바깥→안).`:`응답이 <b>${LAYERS[outIdx].label}</b> 껍질을 통과 중(안→바깥, 역순).`;
+  }
+  document.getElementById('go0').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),3200,()=>render(1)); };
+  document.getElementById('rst0').onclick=()=>{ if(cancel)cancel(); render(0); };
+  render(0);
+})();
+
+// ===== STEP 1: in & out path =====
+(function(){ const W=460,H=210;
+  // 들어가며: CORS→로깅→타이밍→핸들러, 나오며 역순
+  function render(){ let s=''; const seq=['CORS','로깅','타이밍','핸들러','타이밍','로깅','CORS'];
+    const note=['요청 검사','접속 기록','⏱ 시작','진짜 일','⏱ 멈춤·헤더','응답 기록','헤더 추가'];
+    const colors=['var(--q)','var(--pink)','var(--hot)','var(--good)','var(--hot)','var(--pink)','var(--q)'];
+    seq.forEach((n,i)=>{ const col=i<4?0:1; const y= i<4? 20+i*44 : 20+(6-i)*44; const x=i<4?40:280;
+      s+=`<rect x="${x}" y="${y}" width="140" height="34" rx="7" fill="var(--panel)" stroke="${colors[i]}" stroke-width="1.4"/>`;
+      s+=`<text x="${x+10}" y="${y+15}" fill="${colors[i]}" font-size="11" font-family="monospace" font-weight="700">${i+1}. ${n}</text>`;
+      s+=`<text x="${x+10}" y="${y+28}" fill="var(--muted)" font-size="8.5" font-family="monospace">${note[i]}</text>`;
+    });
+    // 들어가며: 왼쪽 열 하강 화살표 (CORS→로깅→타이밍→핸들러)
+    for(let i=0;i<3;i++){ const y1=20+i*44+34, y2=20+(i+1)*44; s+=A.edge(110,y1,110,y2,{color:'var(--q)',lw:1.4}); }
+    // 핸들러(왼 i=3) → 나오며 오른쪽 타이밍(i=4): 가로 연결
+    s+=A.edge(180,20+3*44+17,280,20+(6-4)*44+17,{color:'var(--good)',lw:1.4});
+    // 나오며: 오른쪽 열 상승 화살표 (타이밍→로깅→CORS)
+    for(let i=4;i<6;i++){ const y1=20+(6-i)*44, y2=20+(6-(i+1))*44+34; s+=A.edge(350,y1,350,y2,{color:'var(--pink)',lw:1.4}); }
+    // i 같은 미들웨어 좌우 점선 대응(타이밍·로깅·CORS)
+    [[2,4],[1,5],[0,6]].forEach(([l,r])=>{ const yl=20+l*44+17, yr=20+(6-r)*44+17; s+=`<line x1="180" y1="${yl}" x2="280" y2="${yr}" stroke="var(--line)" stroke-width="0.8" stroke-dasharray="2 4" opacity="0.5"/>`; });
+    s+=`<text x="110" y="205" fill="var(--q)" font-size="9" font-family="monospace" text-anchor="middle">요청 ▼ 들어가며</text>`;
+    s+=`<text x="350" y="205" fill="var(--pink)" font-size="9" font-family="monospace" text-anchor="middle">응답 ▲ 나오며</text>`;
+    document.getElementById('s1').innerHTML=A.svg(W,H,s,'들어가며 나오며');
+    document.getElementById('lab1').innerHTML='같은 미들웨어가 <b>들어갈 때</b>(왼쪽)·<b>나올 때</b>(오른쪽) 두 번 — 타이밍은 들어가며 시계 켜고 나오며 멈춰요.';
+  }
+  render();
+})();
+
+// ===== STEP 2: clean errors =====
+(function(){ let handled=true;
+  const eh=document.getElementById('eh'); eh.innerHTML=`<button data-h="0">예외 핸들러 없음</button><button data-h="1">예외 핸들러 있음</button>`;
+  function render(){ const W=460,H=180; let s='';
+    s+=A.box(20,30,120,44,'핸들러',{color:'var(--good)',sub:'💥 주문 없음',fs:11});
+    s+=A.edge(140,52,200,52,{color:'var(--drop)',lw:1.6});
+    if(handled){ s+=A.box(200,30,120,44,'예외 핸들러',{color:'var(--v)',sub:'에러 잡음',fs:10.5});
+      s+=A.edge(320,52,380,52,{color:'var(--good)',lw:1.6});
+      s+=A.statusBadge(W-50,52,404,'');
+      s+=`<rect x="20" y="100" width="${W-40}" height="56" rx="8" fill="#0a0d13" stroke="var(--good)" stroke-width="1.2"/>`;
+      s+=`<text x="34" y="122" fill="var(--muted)" font-size="10" font-family="monospace">사용자가 받는 응답(깔끔):</text>`;
+      s+=`<text x="34" y="142" fill="var(--ink)" font-size="11.5" font-family="monospace">{ "detail": "주문을 찾을 수 없습니다" }  ← 404</text>`;
+    } else { s+=`<text x="210" y="56" fill="var(--drop)" font-size="11" font-family="monospace">아무도 안 잡음</text>`;
+      s+=A.statusBadge(W-50,52,500,'');
+      s+=`<rect x="20" y="100" width="${W-40}" height="56" rx="8" fill="#0a0d13" stroke="var(--drop)" stroke-width="1.2"/>`;
+      s+=`<text x="34" y="122" fill="var(--muted)" font-size="10" font-family="monospace">사용자가 받는 응답(흉함):</text>`;
+      s+=`<text x="34" y="140" fill="var(--drop)" font-size="10" font-family="monospace">500 Internal Server Error</text>`;
+      s+=`<text x="34" y="152" fill="var(--faint)" font-size="9" font-family="monospace">Traceback ... KeyError ... (스택 노출!)</text>`;
+    }
+    document.getElementById('s2').innerHTML=A.svg(W,H,s,handled?'핸들러 있음':'없음');
+    document.querySelectorAll('#eh button').forEach(b=>{ const on=(b.dataset.h==='1')===handled; b.classList.toggle('on',on); b.style.background=on?(handled?'var(--good)':'var(--drop)'):'var(--panel-2)'; b.style.color=on?(handled?'#0b0e14':'#fff'):'var(--muted)'; });
+    document.getElementById('lab2').innerHTML = handled? '<b style="color:var(--good)">예외 핸들러</b>: 에러를 잡아 깔끔한 404 JSON으로. 사용자 친화·안전.' : '<b style="color:var(--drop)">핸들러 없음</b>: 날것의 500 + 스택 노출 — 흉하고 보안에도 위험.';
+  }
+  eh.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; handled=b.dataset.h==='1'; render(); });
+  render();
+})();
+
+// ===== STEP 3: takeaways =====
+(function(){ const W=460,H=140;
+  let s=`<text x="${W/2}" y="24" fill="var(--good)" font-size="13" font-family="monospace" text-anchor="middle" font-weight="700">미들웨어=양파 껍질, 예외 핸들러=깔끔한 에러</text>`;
+  const rows=[['미들웨어','요청·응답 양쪽 공통 처리','var(--pink)'],['순서','바깥 껍질이 전체를 감쌈','var(--q)'],['예외 핸들러','터진 에러 → 깔끔한 응답','var(--v)']];
+  rows.forEach((r,i)=>{ const y=38+i*32; s+=`<rect x="24" y="${y}" width="${W-48}" height="26" rx="7" fill="var(--panel)" stroke="${r[2]}" stroke-width="1.1"/><text x="40" y="${y+17}" fill="${r[2]}" font-size="11" font-family="monospace" font-weight="700">${r[0]}</text><text x="${W-40}" y="${y+17}" fill="var(--ink)" font-size="10" font-family="monospace" text-anchor="end">${r[1]}</text>`; });
+  document.getElementById('s3').innerHTML=A.svg(W,H,s,'정리');
+  document.getElementById('lab3').innerHTML=`마지막 — 이 서버를 실제로 띄우고 키우는 <b style="color:var(--q)">배포·워커</b>로.`;
+})();
+</script>
+</body>
+</html>

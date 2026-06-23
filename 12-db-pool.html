@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>12 · DB 세션·커넥션 풀 — FastAPI, 눈으로 보기</title>
+<link rel="stylesheet" href="shared/theme.css">
+<link rel="icon" type="image/svg+xml" href="shared/favicon.svg">
+<style>
+  .scene{cursor:default;}
+  .big{font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--ink); margin:8px 2px 0;}
+  .ctl{display:flex; align-items:center; gap:10px; margin:10px 0; flex-wrap:wrap;}
+  .ctl label{font-size:13px; color:var(--muted);}
+  svg{display:block; width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:12px;}
+  .toggles{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .toggles button{font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);cursor:pointer}
+  .toggles button.on{color:#0b0e14;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topnav" id="topnav"></div>
+
+  <header>
+    <div class="tag" style="color:var(--good)">PART E · 바깥 세계 — CH 12</div>
+    <h1>DB 세션·커넥션 풀</h1>
+    <p class="intro">DB에 연결을 맺는 건 <b>비싸요</b>(시간도 자원도). 그래서 요청마다 새로 연결하지 않고, 미리 만들어 둔 <b>연결 몇 개를 돌려쓰는 풀(pool)</b>을 둬요. 요청이 쿼리할 때 <b>풀에서 연결 하나를 빌리고</b>(체크아웃), 쿼리가 끝나면 <b>곧바로 반납</b>해 다음 요청이 쓰게 하죠. 핵심 두 가지 — ① 연결은 <b>쿼리하는 그 순간에만</b> 점유돼요(요청이 살아있는 내내가 아니라). 그래서 풀 크기보다 많은 요청도, 동시에 <b>쿼리만 안 하면</b> 버틸 수 있어요. ② 하지만 <b>동시에 쿼리하는 요청이 풀 크기를 넘으면</b> 나머지는 빈 연결이 날 때까지 <b>기다려요</b> — 쿼리가 느리면 줄이 길어지다 <b>풀 고갈</b>로 타임아웃이 나죠. "요청 수 = 연결 수"가 아니라 "<b>동시에 쿼리 중인 요청 수</b>"가 풀을 압박해요.</p>
+  </header>
+
+  <nav class="stepper" id="stepper">
+    <button data-s="0" class="active">00 · 빌리고 반납</button>
+    <button data-s="1">01 · 풀 고갈</button>
+    <button data-s="2">02 · 쿼리 순간만 점유</button>
+    <button data-s="3">03 · 정리</button>
+  </nav>
+
+  <!-- STEP 0 -->
+  <section class="panel show" data-panel="0">
+    <span class="kicker" style="color:var(--hot)">Step 00 — Borrow & Return</span>
+    <h2>풀에서 빌려 쿼리하고, 끝나면 반납</h2>
+    <p class="lead">연결 4개짜리 풀이 있어요. ▶를 누르면 요청이 <b>풀에서 연결 하나를 빌려</b>(●로 변함) 쿼리하고, 끝나면 <b>반납</b>(○로 돌아옴)해요. 다음 요청이 그 반납된 연결을 다시 쓰죠. 연결을 매번 새로 만들지 않고 <b>돌려쓰는</b> 게 풀의 핵심이에요.</p>
+    <div class="ctl"><button class="btn play" id="go0">▶ 빌리고 반납</button> <button class="btn" id="rst0">↺ 리셋</button></div>
+    <div class="scene" id="s0"></div>
+    <p class="big" id="lab0"></p>
+    <p class="note" style="margin-top:6px">→ 연결 만들기는 비싸서 미리 풀에 채워둬요. 빌림·반납은 싸고 빠르죠.</p>
+  </section>
+
+  <!-- STEP 1 -->
+  <section class="panel" data-panel="1">
+    <span class="kicker" style="color:var(--q)">Step 01 — Exhaustion</span>
+    <h2>동시 쿼리가 풀보다 많으면 — 고갈</h2>
+    <p class="lead"><b>동시에 쿼리하는 요청 수</b>와 <b>풀 크기</b>를 바꿔보세요. 동시 쿼리 ≤ 풀이면 모두 바로 연결을 얻어요. <b>동시 쿼리 > 풀</b>이면 초과분은 <b>대기</b>(빈 연결이 날 때까지)하고, 쿼리가 느려 오래 점유되면 줄이 쌓이다 <b>타임아웃(풀 고갈)</b>이 나요. 근본 해결은 풀을 키우거나, <b>쿼리를 빠르게</b>(짧게 점유) 하는 거예요.</p>
+    <div class="ctl"><label>동시 쿼리 <span id="qL" style="color:var(--hot)">6</span></label><input type="range" id="qv" min="1" max="12" step="1" value="6" style="flex:1">
+      <label>풀 크기 <span id="pL" style="color:var(--good)">4</span></label><input type="range" id="pv" min="1" max="10" step="1" value="4" style="flex:1"></div>
+    <div class="scene" id="s1"></div>
+    <p class="big" id="lab1"></p>
+    <p class="note" style="margin-top:6px">→ 풀을 무작정 키우면 DB 쪽이 연결 폭주로 힘들어요. "느린 쿼리 줄이기"가 더 근본적인 약이에요.</p>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="panel" data-panel="2">
+    <span class="kicker" style="color:var(--v)">Step 02 — Held Only During Query</span>
+    <h2>연결은 "쿼리하는 순간"에만 점유된다</h2>
+    <p class="lead">흔한 오해 — "요청이 세션을 열면 그 요청 내내 연결을 붙잡는다"? <b>아니에요.</b> ▶로 한 요청의 타임라인을 보세요. 세션은 요청 내내 열려 있지만, 실제 <b>풀의 연결</b>은 <b>쿼리하는 짧은 구간</b>에만 체크아웃되고 끝나면 바로 반납돼요. 그래서 요청이 검증·직렬화·대기로 보내는 시간엔 연결을 안 쥐고 있죠 — 덕분에 풀 크기보다 많은 요청도 버틸 수 있어요.</p>
+    <div class="ctl"><button class="btn play" id="go2">▶ 한 요청</button> <button class="btn" id="rst2">↺ 리셋</button></div>
+    <div class="scene" id="s2"></div>
+    <p class="big" id="lab2"></p>
+    <p class="note" style="margin-top:6px">→ 그래서 "요청 수 = 연결 수"가 아니에요. 풀을 압박하는 건 <b>같은 순간에 쿼리 중인 요청 수</b>예요.</p>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="panel" data-panel="3">
+    <span class="kicker" style="color:var(--good)">Step 03 — Takeaways</span>
+    <h2>정리 — 커넥션 풀</h2>
+    <p class="lead">풀은 <b>비싼 연결을 미리 만들어 돌려쓰는</b> 장치예요 — 쿼리할 때 빌리고 끝나면 반납. 연결은 <b>쿼리 순간에만</b> 점유되고, <b>동시 쿼리가 풀을 넘으면</b> 대기·고갈이 나요. 그런데 코드가 자기도 모르게 <b>쿼리를 폭발적으로</b> 날리는 패턴이 있어요 — 목록을 불러오고 각 항목마다 또 쿼리하는… 보이지 않는 쿼리 폭탄, 다음 챕터의 N+1이에요.</p>
+    <div class="scene" id="s3"></div>
+    <p class="big" id="lab3"></p>
+    <p class="note" style="margin-top:14px">→ 다음 → <a href="13-n-plus-1.html" style="color:var(--q);font-weight:700">CH 13 · N+1 쿼리</a></p>
+  </section>
+
+  <p class="foot">// 코드 없는 직관 입문 · <a href="index.html">목차</a></p>
+</div>
+
+<script src="shared/lib.js"></script>
+<script src="shared/lib-api.js"></script>
+<script>
+VZ.mountTopnav('#topnav', '12 · 커넥션 풀');
+VZ.setupStepper();
+const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
+
+// ===== STEP 0: borrow & return =====
+(function(){ const W=460,H=200; let cancel=null; const SIZE=4;
+  function render(p){ let s=''; // 3요청이 빌리고 반납 (구간 겹쳐 여러 슬롯 동시 점유)
+    // 각 요청 i: 빌림 i*0.18, 점유 0.34 (겹침), 반납
+    let inUse=0; const reqState=[];
+    for(let i=0;i<3;i++){ const start=i*0.18; const using = p>=start && p<start+0.34; if(using) inUse++; reqState.push(using?'쿼리 중(빌림)': p>=start+0.34?'반납함':'대기'); }
+    s+=`<text x="${W/2}" y="28" fill="var(--muted)" font-size="11" font-family="monospace" text-anchor="middle">커넥션 풀 (크기 ${SIZE})</text>`;
+    s+=A.pool(W/2-((30+5)*SIZE)/2, 40, SIZE, inUse, {});
+    // 요청들
+    for(let i=0;i<3;i++){ const x=30+i*150; const st=reqState[i]; const c=st.includes('쿼리')?'var(--hot)':st==='반납함'?'var(--good)':'var(--line)';
+      s+=A.box(x,110,120,46,'요청'+(i+1),{color:c,sub:st,fs:11});
+      if(st.includes('쿼리')) s+=A.edge(x+60,110,W/2,76,{color:'var(--hot)',lw:1.4,dash:'4 3'});
+    }
+    document.getElementById('s0').innerHTML=A.svg(W,H,s,'빌리고 반납');
+    document.getElementById('lab0').innerHTML = p<0.02?'▶로 시작하세요.': inUse>0?`지금 <b style="color:var(--hot)">${inUse}개 연결</b>이 빌려져 쿼리 중 — 끝나면 반납돼 다음 요청이 재사용.`:'연결이 모두 반납돼 풀에 대기 중(○). 빌림·반납이 빠르게 도네요.';
+  }
+  document.getElementById('go0').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),3000,()=>render(1)); };
+  document.getElementById('rst0').onclick=()=>{ if(cancel)cancel(); render(0); };
+  render(0);
+})();
+
+// ===== STEP 1: exhaustion =====
+(function(){ const W=460,H=180; let q=6, sz=4;
+  const qv=document.getElementById('qv'), pv=document.getElementById('pv'), qL=document.getElementById('qL'), pL=document.getElementById('pL');
+  qv.oninput=()=>{ q=+qv.value; qL.textContent=q; render(); };
+  pv.oninput=()=>{ sz=+pv.value; pL.textContent=sz; render(); };
+  function render(){ const inUse=Math.min(q,sz), waiting=Math.max(0,q-sz); let s='';
+    s+=`<text x="${W/2}" y="26" fill="var(--muted)" font-size="11" font-family="monospace" text-anchor="middle">풀 크기 ${sz} · 동시 쿼리 ${q}</text>`;
+    const slotW=Math.min(34,(W-80)/sz-5);
+    s+=A.pool(W/2-((slotW+5)*sz)/2, 40, sz, inUse, {slotW:slotW, waiting:waiting});
+    const overload=waiting>0;
+    s+=`<text x="${W/2}" y="110" fill="${overload?'var(--drop)':'var(--good)'}" font-size="13" font-family="monospace" text-anchor="middle" font-weight="700">${overload?`✗ ${waiting}개 요청 대기 — 길어지면 타임아웃(고갈)`:'✓ 모두 즉시 연결 확보'}</text>`;
+    s+=`<text x="${W/2}" y="140" fill="var(--muted)" font-size="10.5" font-family="monospace" text-anchor="middle">사용 중 ${inUse}/${sz}${waiting?` · 대기 ${waiting}`:''}</text>`;
+    document.getElementById('s1').innerHTML=A.svg(W,H,s,'풀 고갈');
+    document.getElementById('lab1').innerHTML = overload? `동시 쿼리(${q})가 풀(${sz})을 <b style="color:var(--drop)">초과</b> — ${waiting}개가 대기. 쿼리가 느리면 줄이 쌓여 고갈돼요.` : `동시 쿼리(${q}) ≤ 풀(${sz}) — <b style="color:var(--good)">모두 즉시</b> 처리. 여유.`;
+  }
+  render();
+})();
+
+// ===== STEP 2: held only during query =====
+(function(){ const W=460,H=180; let cancel=null; const tmax=1.6;
+  function render(p){ const now=p*tmax; let s='';
+    const tasks=[
+      {lane:'세션 (요청 내내)',t0:0.0,dur:1.5,label:'세션 열림',kind:'wait'},
+      {lane:'풀 연결 (체크아웃)',t0:0.5,dur:0.35,label:'쿼리(점유)',kind:'run',color:'var(--hot)'},
+      {lane:'요청 일',t0:0.0,dur:0.45,label:'검증·준비',kind:'run',color:'var(--q)'},
+      {lane:'요청 일',t0:0.85,dur:0.6,label:'직렬화·응답',kind:'run',color:'var(--good)'},
+    ];
+    const vis=tasks.filter(t=>t.t0<now+0.001).map(t=>({...t,dur:Math.max(0,Math.min(t.dur,now-t.t0))}));
+    s=A.loop(W,H,['세션 (요청 내내)','풀 연결 (체크아웃)','요청 일'],vis,tmax,{playhead:now,tick:0.4,padL:110});
+    const querying = now>=0.5 && now<0.85;
+    if(querying) s+=`<text x="${W-14}" y="13" fill="var(--hot)" font-size="10.5" font-family="monospace" text-anchor="end">지금만 연결 점유</text>`;
+    document.getElementById('s2').innerHTML=A.svg(W,H,s,'쿼리 순간만 점유');
+    document.getElementById('lab2').innerHTML = now<0.5?'세션은 열렸지만 <b>아직 연결은 안 빌렸어요</b>(검증·준비 중).': querying?'<b style="color:var(--hot)">쿼리하는 이 순간만</b> 풀 연결을 빌려요 — 끝나면 즉시 반납.':'쿼리 끝 → <b>연결 반납</b>. 세션은 아직 열려 있지만 연결은 안 쥠. 요청≠연결 점유!';
+  }
+  document.getElementById('go2').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),2800,()=>render(1)); };
+  document.getElementById('rst2').onclick=()=>{ if(cancel)cancel(); render(0); };
+  render(0);
+})();
+
+// ===== STEP 3: takeaways =====
+(function(){ const W=460,H=140;
+  let s=`<text x="${W/2}" y="24" fill="var(--good)" font-size="13" font-family="monospace" text-anchor="middle" font-weight="700">풀 = 비싼 연결을 빌려쓰고 반납</text>`;
+  const rows=[['점유 시점','쿼리하는 순간만 (요청 내내 ✗)','var(--hot)'],['고갈','동시 쿼리 > 풀 → 대기·타임아웃','var(--drop)'],['약','풀 키우기 < 느린 쿼리 줄이기','var(--good)']];
+  rows.forEach((r,i)=>{ const y=38+i*32; s+=`<rect x="24" y="${y}" width="${W-48}" height="26" rx="7" fill="var(--panel)" stroke="${r[2]}" stroke-width="1.1"/><text x="40" y="${y+17}" fill="${r[2]}" font-size="11" font-family="monospace" font-weight="700">${r[0]}</text><text x="${W-40}" y="${y+17}" fill="var(--ink)" font-size="10" font-family="monospace" text-anchor="end">${r[1]}</text>`; });
+  document.getElementById('s3').innerHTML=A.svg(W,H,s,'정리');
+  document.getElementById('lab3').innerHTML=`코드가 자기도 모르게 쿼리를 폭발시키는 패턴 → <b style="color:var(--q)">N+1</b>.`;
+})();
+</script>
+</body>
+</html>

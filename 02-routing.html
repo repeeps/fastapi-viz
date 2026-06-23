@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 · 라우팅 — FastAPI, 눈으로 보기</title>
+<link rel="stylesheet" href="shared/theme.css">
+<link rel="icon" type="image/svg+xml" href="shared/favicon.svg">
+<style>
+  .scene{cursor:default;}
+  .big{font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--ink); margin:8px 2px 0;}
+  .ctl{display:flex; align-items:center; gap:10px; margin:10px 0; flex-wrap:wrap;}
+  svg{display:block; width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:12px;}
+  .toggles{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .toggles button{font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);cursor:pointer}
+  .toggles button.on{color:#0b0e14;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topnav" id="topnav"></div>
+
+  <header>
+    <div class="tag" style="color:var(--q)">PART A · 요청의 여정 — CH 02</div>
+    <h1>라우팅</h1>
+    <p class="intro">서버엔 핸들러(요청을 처리하는 함수)가 여러 개예요. 요청이 들어오면 그 <b>메서드+경로</b>를 보고 <b>어느 핸들러로 보낼지</b> 골라야 하는데, 이게 <b>라우팅</b>이에요. 경로엔 두 종류의 변수가 박힐 수 있어요 — <b>경로 파라미터</b>(<code>/users/{id}</code>의 id처럼 경로 일부)와 <b>쿼리 파라미터</b>(<code>?limit=10</code>처럼 ? 뒤). 라우터는 들어온 URL을 등록된 경로 틀에 맞춰보고, 맞으면 그 변수들을 <b>뽑아서</b> 핸들러에 넘겨요. 함정은 <b>매칭 순서</b>예요 — 여러 틀이 겹치면 <b>구체적인 것을 먼저</b> 둬야 엉뚱한 데로 안 빠져요.</p>
+  </header>
+
+  <nav class="stepper" id="stepper">
+    <button data-s="0" class="active">00 · 길 찾기</button>
+    <button data-s="1">01 · 파라미터 뽑기</button>
+    <button data-s="2">02 · 매칭 순서 함정</button>
+    <button data-s="3">03 · 정리</button>
+  </nav>
+
+  <!-- STEP 0 -->
+  <section class="panel show" data-panel="0">
+    <span class="kicker" style="color:var(--hot)">Step 00 — Finding the Route</span>
+    <h2>들어온 URL이 어느 핸들러로?</h2>
+    <p class="lead">서버에 핸들러 셋이 등록돼 있어요. ▶를 누르면 요청 <b>GET /users/1</b>이 들어와 위에서부터 틀에 맞춰봐요 — <code>/</code>? 아니. <code>/users</code>? 아니. <code>/users/{id}</code>? <b>맞음!</b> 그 핸들러로 가고 <b>id=1</b>을 뽑아 넘겨요. 라우터는 이렇게 "맞는 틀"을 찾는 길잡이예요.</p>
+    <div class="ctl"><button class="btn play" id="go0">▶ 길 찾기</button> <button class="btn" id="rst0">↺ 리셋</button></div>
+    <div class="scene" id="s0"></div>
+    <p class="big" id="lab0"></p>
+    <p class="note" style="margin-top:6px">→ 메서드도 함께 봐요 — 같은 <code>/users</code>라도 GET(목록)과 POST(생성)는 <b>다른 핸들러</b>예요.</p>
+  </section>
+
+  <!-- STEP 1 -->
+  <section class="panel" data-panel="1">
+    <span class="kicker" style="color:var(--q)">Step 01 — Extracting Params</span>
+    <h2>경로·쿼리 파라미터 뽑기</h2>
+    <p class="lead">들어올 URL을 골라보세요. 라우터가 <code>/users/{id}</code> 틀에 맞춰 <b>경로 파라미터</b>(id)를 뽑고, <code>?</code> 뒤의 <b>쿼리 파라미터</b>(limit·active)도 분리해 핸들러에 넘겨요. 경로 변수는 "어느 자원"을, 쿼리는 "어떻게 거를지"를 보통 맡아요.</p>
+    <div class="toggles" id="urls"></div>
+    <div class="scene" id="s1"></div>
+    <p class="big" id="lab1"></p>
+    <p class="note" style="margin-top:6px">→ 라우터는 일단 값을 <b>떼어내고</b>, "id가 진짜 양의 정수인지" 타입 확정·검사는 다음 단계(검증)가 맡아요 — 책임이 나뉘어 있어요. 라우팅은 "어디로"까지.</p>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="panel" data-panel="2">
+    <span class="kicker" style="color:var(--v)">Step 02 — Order Matters</span>
+    <h2>매칭 순서 함정 — 구체적인 것을 먼저</h2>
+    <p class="lead"><code>/users/me</code>(내 정보)와 <code>/users/{id}</code>(특정 사용자)가 둘 다 있어요. 요청 <b>/users/me</b>가 오면? 등록 <b>순서</b>를 바꿔보세요. <code>{id}</code>가 <b>먼저</b>면 "me"가 <b>id 값으로 삼켜져</b> 엉뚱한 핸들러로 가요. <code>/users/me</code>를 <b>먼저</b> 둬야 의도대로 잡혀요. FastAPI는 위에서부터 첫 일치를 쓰니까요.</p>
+    <div class="toggles" id="order"></div>
+    <div class="scene" id="s2"></div>
+    <p class="big" id="lab2"></p>
+    <p class="note" style="margin-top:6px">→ 규칙: <b>고정 경로(/users/me)를 변수 경로(/users/{id})보다 먼저</b> 등록. 안 그러면 조용히 잘못 잡혀요.</p>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="panel" data-panel="3">
+    <span class="kicker" style="color:var(--good)">Step 03 — Takeaways</span>
+    <h2>정리 — 라우팅을 한 문장으로</h2>
+    <p class="lead">라우팅은 <b>메서드+경로로 핸들러를 고르고, 경로·쿼리 파라미터를 뽑아</b> 넘기는 길찾기예요. 겹치는 틀은 <b>구체적인 것을 먼저</b>. 그런데 뽑은 값들은 아직 <b>문자열·미검증</b>이에요 — "id가 정말 양의 정수인가? 바디 JSON이 올바른가?"는 누가 검사할까요? 다음은 입력을 거르는 문지기, Pydantic 검증이에요.</p>
+    <div class="scene" id="s3"></div>
+    <p class="big" id="lab3"></p>
+    <p class="note" style="margin-top:14px">→ 다음 → <a href="03-validation.html" style="color:var(--q);font-weight:700">CH 03 · Pydantic 검증</a></p>
+  </section>
+
+  <p class="foot">// 코드 없는 직관 입문 · <a href="index.html">목차</a></p>
+</div>
+
+<script src="shared/lib.js"></script>
+<script src="shared/lib-api.js"></script>
+<script>
+VZ.mountTopnav('#topnav', '02 · 라우팅');
+VZ.setupStepper();
+const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
+
+// ===== STEP 0: route matching =====
+(function(){ const W=460,H=220; let cancel=null;
+  const routes=[{m:'GET',p:'/'},{m:'GET',p:'/users'},{m:'GET',p:'/users/{id}'}];
+  const target=2; // 매칭되는 라우트
+  function render(p){ let s='';
+    s+=A.reqCard(14,16,200,'GET','/users/1',{h:44});
+    routes.forEach((r,i)=>{ const y=78+i*44; const tested = p>=0.1+i*0.25; const matched = (i===target) && p>=0.1+target*0.25;
+      const skipped = tested && i<target; // 패턴 안 맞음 → 건너뜀(에러 아님)
+      s+=`<rect x="120" y="${y}" width="${W-140}" height="34" rx="8" fill="${matched?'rgba(110,231,183,.12)':'var(--panel)'}" stroke="${matched?'var(--good)':'var(--line)'}" stroke-width="${matched?2.4:1.3}" opacity="${skipped?0.5:1}"/>`;
+      s+=`<rect x="130" y="${y+8}" width="42" height="18" rx="4" fill="${A.METHODC[r.m]}"/><text x="151" y="${y+21}" fill="#0b0e14" font-size="10" font-family="monospace" font-weight="700" text-anchor="middle">${r.m}</text>`;
+      s+=`<text x="182" y="${y+21}" fill="var(--ink)" font-size="11.5" font-family="monospace">${r.p}</text>`;
+      if(skipped && !matched) s+=`<text x="${W-30}" y="${y+21}" fill="var(--faint)" font-size="11" font-family="monospace" text-anchor="end">— 안 맞음, 다음</text>`;
+      if(matched) s+=`<text x="${W-30}" y="${y+21}" fill="var(--good)" font-size="13" text-anchor="end">✓</text>`;
+    });
+    if(p>=0.85) s+=`<text x="${W/2}" y="212" fill="var(--good)" font-size="11" font-family="monospace" text-anchor="middle">→ 핸들러 호출, id="1" 전달</text>`;
+    document.getElementById('s0').innerHTML=A.svg(W,H,s,'라우트 매칭');
+    const step=Math.min(target, Math.floor(clamp((p-0.1)/0.25,0,3)));
+    document.getElementById('lab0').innerHTML = p<0.1?'▶로 길찾기를 시작하세요.': p<0.85?`등록 순서대로 틀에 맞춰보는 중… <code>${routes[step].p}</code> 확인`:'<code>/users/{id}</code>에 <b style="color:var(--good)">일치</b> — id=1을 뽑아 그 핸들러로!';
+  }
+  document.getElementById('go0').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),2600,()=>render(1)); };
+  document.getElementById('rst0').onclick=()=>{ if(cancel)cancel(); render(0); };
+  render(0);
+})();
+
+// ===== STEP 1: param extraction =====
+(function(){ const W=460,H=200; let sel=0;
+  const CASES=[
+    {url:'/users/1', route:'/users/{id}', path:{id:'1'}, query:{}},
+    {url:'/users/42?active=true', route:'/users/{id}', path:{id:'42'}, query:{active:'true'}},
+    {url:'/users?limit=10&sort=name', route:'/users', path:{}, query:{limit:'10',sort:'name'}},
+  ];
+  const urls=document.getElementById('urls');
+  urls.innerHTML=CASES.map((c,i)=>`<button data-i="${i}">${c.url}</button>`).join('');
+  function render(){ const c=CASES[sel]; let s='';
+    s+=A.reqCard(14,16,W-28,'GET',c.url,{h:42});
+    s+=`<text x="20" y="84" fill="var(--muted)" font-size="10" font-family="monospace">매칭된 틀:</text>`;
+    s+=`<text x="110" y="84" fill="var(--q)" font-size="11.5" font-family="monospace">${c.route}</text>`;
+    // 경로 파라미터
+    s+=`<text x="20" y="116" fill="var(--hot)" font-size="11" font-family="monospace" font-weight="700">경로 파라미터</text>`;
+    const pk=Object.keys(c.path); if(pk.length) pk.forEach((k,i)=>{ s+=A.pill(70+i*110,138,`${k} = ${c.path[k]}`,{color:'var(--hot)',active:true}); }); else s+=`<text x="40" y="142" fill="var(--faint)" font-size="10" font-family="monospace">(없음)</text>`;
+    // 쿼리 파라미터
+    s+=`<text x="20" y="170" fill="var(--v)" font-size="11" font-family="monospace" font-weight="700">쿼리 파라미터</text>`;
+    const qk=Object.keys(c.query); if(qk.length) qk.forEach((k,i)=>{ s+=A.pill(80+i*120,188,`${k} = ${c.query[k]}`,{color:'var(--v)',active:true}); }); else s+=`<text x="40" y="192" fill="var(--faint)" font-size="10" font-family="monospace">(없음)</text>`;
+    document.getElementById('s1').innerHTML=A.svg(W,H,s,'파라미터 뽑기');
+    document.querySelectorAll('#urls button').forEach((b,i)=>{ const on=i===sel; b.classList.toggle('on',on); b.style.background=on?'var(--q)':'var(--panel-2)'; b.style.color=on?'#0b0e14':'var(--muted)'; });
+    document.getElementById('lab1').innerHTML=`경로 변수 <b style="color:var(--hot)">${pk.length}개</b>(어느 자원) · 쿼리 <b style="color:var(--v)">${qk.length}개</b>(어떻게 거를지) 를 뽑아 핸들러에 넘겨요.`;
+  }
+  urls.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; sel=+b.dataset.i; render(); });
+  render();
+})();
+
+// ===== STEP 2: order trap =====
+(function(){ const W=460,H=190; let meFirst=true;
+  const order=document.getElementById('order');
+  order.innerHTML=`<button data-o="1">순서: /users/me 먼저</button><button data-o="0">순서: /users/{id} 먼저</button>`;
+  function render(){ let s=''; const routes = meFirst?['/users/me','/users/{id}']:['/users/{id}','/users/me'];
+    s+=A.reqCard(14,16,W-28,'GET','/users/me',{h:40});
+    // /users/me 요청은 두 틀 다에 매칭됨 → 위에서부터 첫 일치(0번 줄)가 잡힘
+    const hitRoute=routes[0]; const correct = hitRoute==='/users/me';
+    routes.forEach((r,i)=>{ const y=74+i*42; const hit=i===0; const matches=true; // 둘 다 /users/me에 매칭됨
+      const shadowed = !hit; // 1번 줄은 위에서 잡혀 도달 못 함
+      s+=`<rect x="20" y="${y}" width="${W-40}" height="34" rx="8" fill="${hit?(correct?'rgba(110,231,183,.12)':'rgba(251,113,133,.12)'):'var(--panel)'}" stroke="${hit?(correct?'var(--good)':'var(--drop)'):'var(--line)'}" stroke-width="${hit?2.4:1.2}" opacity="${shadowed?0.5:1}"/>`;
+      s+=`<text x="34" y="${y+21}" fill="${hit?(correct?'var(--good)':'var(--drop)'):'var(--muted)'}" font-size="12" font-family="monospace" font-weight="${hit?700:400}">${i+1}. ${r}</text>`;
+      if(hit) s+=`<text x="${W-34}" y="${y+21}" fill="${correct?'var(--good)':'var(--drop)'}" font-size="10.5" font-family="monospace" text-anchor="end">← 첫 일치${correct?', 정확!':', id="me"로 삼킴'}</text>`;
+      else s+=`<text x="${W-34}" y="${y+21}" fill="var(--faint)" font-size="10.5" font-family="monospace" text-anchor="end">${r==='/users/me'?'맞지만 도달 못 함':'안 닿음'}</text>`;
+    });
+    if(!correct) s+=`<text x="${W/2}" y="172" fill="var(--drop)" font-size="10.5" font-family="monospace" text-anchor="middle">⚠ {id}가 "me"를 문자열 id로 받아들여 삼킴 — 정작 /users/me는 도달 못 함</text>`;
+    else s+=`<text x="${W/2}" y="172" fill="var(--good)" font-size="11" font-family="monospace" text-anchor="middle">✓ 고정 경로가 먼저라 /users/me 핸들러로 정확히</text>`;
+    document.getElementById('s2').innerHTML=A.svg(W,H,s,'매칭 순서');
+    document.querySelectorAll('#order button').forEach(b=>{ const on=(b.dataset.o==='1')===meFirst; b.classList.toggle('on',on); b.style.background=on?(meFirst?'var(--good)':'var(--drop)'):'var(--panel-2)'; b.style.color=on?(meFirst?'#0b0e14':'#fff'):'var(--muted)'; });
+    document.getElementById('lab2').innerHTML = correct? '<b style="color:var(--good)">/users/me 먼저</b> — "me"가 고정 경로에 먼저 잡혀 정확해요.' : '<b style="color:var(--drop)">/users/{id} 먼저</b> — "me"가 id로 삼켜져요. 순서가 결과를 바꿔요!';
+  }
+  order.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; meFirst=b.dataset.o==='1'; render(); });
+  render();
+})();
+
+// ===== STEP 3: takeaways =====
+(function(){ const W=460,H=140;
+  let s=`<text x="${W/2}" y="24" fill="var(--good)" font-size="13" font-family="monospace" text-anchor="middle" font-weight="700">라우팅 = 메서드+경로로 핸들러 고르고 변수 뽑기</text>`;
+  const rows=[['경로 파라미터','/users/{id} → 어느 자원','var(--hot)'],['쿼리 파라미터','?limit=10 → 어떻게 거를지','var(--v)'],['매칭 순서','구체적인 것을 먼저','var(--q)']];
+  rows.forEach((r,i)=>{ const y=38+i*32; s+=`<rect x="40" y="${y}" width="${W-80}" height="26" rx="7" fill="var(--panel)" stroke="${r[2]}" stroke-width="1.1"/><text x="56" y="${y+17}" fill="${r[2]}" font-size="11.5" font-family="monospace" font-weight="700">${r[0]}</text><text x="${W-56}" y="${y+17}" fill="var(--ink)" font-size="10.5" font-family="monospace" text-anchor="end">${r[1]}</text>`; });
+  document.getElementById('s3').innerHTML=A.svg(W,H,s,'정리');
+  document.getElementById('lab3').innerHTML=`값을 떼어냈으니 <b>타입 확정·검사</b>는 다음 단계 — <b style="color:var(--v)">Pydantic 검증</b>.`;
+})();
+</script>
+</body>
+</html>

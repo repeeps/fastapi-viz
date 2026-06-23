@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>01 · HTTP — FastAPI, 눈으로 보기</title>
+<link rel="stylesheet" href="shared/theme.css">
+<link rel="icon" type="image/svg+xml" href="shared/favicon.svg">
+<style>
+  .scene{cursor:default;}
+  .big{font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--ink); margin:8px 2px 0;}
+  .ctl{display:flex; align-items:center; gap:10px; margin:10px 0; flex-wrap:wrap;}
+  .ctl label{font-size:13px; color:var(--muted);}
+  svg{display:block; width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:12px;}
+  .toggles{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .toggles button{font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);cursor:pointer}
+  .toggles button.on{color:#0b0e14;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topnav" id="topnav"></div>
+
+  <header>
+    <div class="tag" style="color:var(--q)">PART A · 요청의 여정 — CH 01</div>
+    <h1>HTTP 요청·응답</h1>
+    <p class="intro">서버와 대화하는 언어가 <b>HTTP</b>예요. 브라우저는 <b>약속된 형식의 편지</b>(요청)를 보내고, 서버는 <b>같은 형식의 답장</b>(응답)을 줘요. 요청 편지엔 네 가지가 적혀 있어요 — <b>메서드</b>(무엇을 하려는지: 읽기 GET / 만들기 POST / 바꾸기 PUT / 지우기 DELETE), <b>경로</b>(어디에: /users/1), <b>헤더</b>(부가 정보: 인증 토큰 등), <b>바디</b>(보내는 데이터). 답장의 첫 줄엔 <b>상태코드</b>가 있어요 — 잘됐는지(2xx), 네 요청이 틀렸는지(4xx), 서버가 터졌는지(5xx)를 숫자 세 자리로 알려줘요. 이 약속만 지키면 어떤 언어·기기든 서로 대화할 수 있어요.</p>
+  </header>
+
+  <nav class="stepper" id="stepper">
+    <button data-s="0" class="active">00 · 편지 한 통</button>
+    <button data-s="1">01 · 요청 만들어 보내기</button>
+    <button data-s="2">02 · 상태코드 읽기</button>
+    <button data-s="3">03 · 정리</button>
+  </nav>
+
+  <!-- STEP 0 -->
+  <section class="panel show" data-panel="0">
+    <span class="kicker" style="color:var(--hot)">Step 00 — A Letter</span>
+    <h2>요청 편지가 가고, 응답 편지가 온다</h2>
+    <p class="lead">▶를 누르면 <b>요청 편지</b>가 서버로 가요. 메서드(<b>GET</b>)·경로(<b>/users/1</b>)·헤더·(GET이라) 빈 바디로 된 편지죠. 서버는 그 사용자를 찾아 <b>200 OK</b>와 함께 데이터를 답장으로 보내요. 핵심은 <b>형식이 정해져 있다</b>는 거예요 — 그래서 서버는 편지만 보고 무엇을 원하는지 알아요.</p>
+    <div class="ctl"><button class="btn play" id="go0">▶ 주고받기</button> <button class="btn" id="rst0">↺ 리셋</button></div>
+    <div class="scene" id="s0"></div>
+    <p class="big" id="lab0"></p>
+    <p class="note" style="margin-top:6px">→ 요청과 응답은 <b>한 쌍</b>이에요. 하나 보내면 하나 와요(이 짝을 깨는 방식은 뒤의 async·웹소켓에서).</p>
+  </section>
+
+  <!-- STEP 1 -->
+  <section class="panel" data-panel="1">
+    <span class="kicker" style="color:var(--q)">Step 01 — Build & Send</span>
+    <h2>요청을 직접 만들어 보내기</h2>
+    <p class="lead">메서드와 상황을 바꿔 요청을 만들고 <b>보내기</b>를 눌러보세요. 서버(가짜)가 상황에 맞는 <b>상태코드</b>로 답해요 — 있는 걸 읽으면 200, 새로 만들면 201, 없는 걸 찾으면 404, 바디가 빠지면 만들 수 없어 422… 같은 경로라도 <b>메서드·상황</b>에 따라 답이 달라지는 걸 보세요.</p>
+    <div class="toggles" id="mtoggle"></div>
+    <div class="ctl"><label><input type="checkbox" id="exists" checked> 자원이 존재함</label> <label><input type="checkbox" id="hasbody"> 바디 포함</label> <button class="btn play" id="send1">▶ 보내기</button></div>
+    <div class="scene" id="s1"></div>
+    <p class="big" id="lab1"></p>
+    <p class="note" style="margin-top:6px">→ 상태코드는 서버의 <b>한 줄 요약</b>이에요. 본문을 안 봐도 성공/실패와 책임 소재를 알 수 있죠.</p>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="panel" data-panel="2">
+    <span class="kicker" style="color:var(--v)">Step 02 — Reading Status Codes</span>
+    <h2>상태코드 읽기 — 세 자리의 뜻</h2>
+    <p class="lead">상태코드는 <b>첫 자리</b>로 무리를 나눠요. 각 무리를 눌러 뜻과 "누구 탓인지"를 보세요. 핵심 직관: <b>4xx는 요청한 쪽(클라이언트) 탓</b>, <b>5xx는 서버 탓</b>이에요. 이 구분만 알아도 "내 코드가 문제인가, 보낸 게 문제인가"를 바로 가려요.</p>
+    <div class="toggles" id="fam"></div>
+    <div class="scene" id="s2"></div>
+    <p class="big" id="lab2"></p>
+    <p class="note" style="margin-top:6px">→ 자주 보는 것: 200(OK)·201(만듦)·204(됐고 본문없음)·400(잘못된 요청)·401(인증필요)·404(없음)·422(검증실패)·500(서버오류).</p>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="panel" data-panel="3">
+    <span class="kicker" style="color:var(--good)">Step 03 — Takeaways</span>
+    <h2>정리 — HTTP를 한 문장으로</h2>
+    <p class="lead">HTTP는 <b>메서드·경로·헤더·바디로 된 요청</b>과 <b>상태코드를 단 응답</b>이 한 쌍으로 오가는 약속이에요. 형식이 고정돼 있어 서버는 편지만 보고 일을 알아채죠. 그럼 서버는 <b>"GET /users/1"이라는 편지를 보고 어떻게 정확한 핸들러를 찾을까요?</b> 다음은 그 길찾기 — 라우팅이에요.</p>
+    <div class="scene" id="s3"></div>
+    <p class="big" id="lab3"></p>
+    <p class="note" style="margin-top:14px">→ 다음 → <a href="02-routing.html" style="color:var(--q);font-weight:700">CH 02 · 라우팅</a></p>
+  </section>
+
+  <p class="foot">// 코드 없는 직관 입문 · <a href="index.html">목차</a></p>
+</div>
+
+<script src="shared/lib.js"></script>
+<script src="shared/lib-api.js"></script>
+<script>
+VZ.mountTopnav('#topnav', '01 · HTTP');
+VZ.setupStepper();
+const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
+
+// ===== STEP 0: request/response pair =====
+(function(){ const W=460,H=210; let cancel=null;
+  function render(p){ let s='';
+    s+=A.box(18,84,72,44,'브라우저',{color:'var(--muted)',fs:10});
+    s+=A.box(W-90,84,72,44,'서버',{color:'var(--v)',fs:11});
+    s+=`<line x1="90" y1="92" x2="${W-90}" y2="92" stroke="var(--line)" stroke-width="1.4"/>`;
+    s+=`<line x1="90" y1="120" x2="${W-90}" y2="120" stroke="var(--line)" stroke-width="1.4"/>`;
+    s+=`<text x="100" y="84" fill="var(--q)" font-size="9" font-family="monospace">요청 →</text>`;
+    s+=`<text x="${W-100}" y="134" fill="var(--good)" font-size="9" font-family="monospace" text-anchor="end">← 응답</text>`;
+    // 요청 카드 (전반 이동)
+    if(p<0.45){ const u=p/0.45; const x=92+(W-200)*u; s+=A.reqCard(x-90,150,180,'GET','/users/1',{h:46}); }
+    else if(p<0.55){ s+=`<text x="${W/2}" y="175" fill="var(--v)" font-size="11" font-family="monospace" text-anchor="middle">서버가 사용자 #1 조회…</text>`; }
+    else { // 응답
+      const u=clamp((p-0.55)/0.45,0,1); s+=A.statusBadge(W/2,165,200,'OK');
+      s+=`<text x="${W/2}" y="192" fill="var(--muted)" font-size="10" font-family="monospace" text-anchor="middle">{ "id": 1, "name": "..." }</text>`;
+    }
+    // 요청 편지 구성 표시(상단)
+    s+=`<text x="100" y="60" fill="var(--ink)" font-size="10" font-family="monospace">메서드 GET · 경로 /users/1 · 헤더 · (빈 바디)</text>`;
+    document.getElementById('s0').innerHTML=A.svg(W,H,s,'요청 응답 한 쌍');
+    document.getElementById('lab0').innerHTML = p<0.45?'<b style="color:var(--q)">요청 편지</b>가 서버로 가요 — 메서드·경로·헤더·바디.': p<0.55?'서버가 편지를 읽고 사용자 #1을 찾아요.':'서버가 <b style="color:var(--good)">200 OK</b> + 데이터로 답장했어요. 한 쌍 완료.';
+  }
+  document.getElementById('go0').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),2600,()=>render(1)); };
+  document.getElementById('rst0').onclick=()=>{ if(cancel)cancel(); render(0); };
+  render(0);
+})();
+
+// ===== STEP 1: build & send =====
+(function(){ const W=460,H=210; let method='GET', cancel=null;
+  const METHODS=['GET','POST','PUT','DELETE'];
+  const mt=document.getElementById('mtoggle');
+  mt.innerHTML=METHODS.map(m=>`<button data-m="${m}">${m}</button>`).join('');
+  const exists=document.getElementById('exists'), hasbody=document.getElementById('hasbody');
+  const usesBody=()=> method==='POST'||method==='PUT'; // GET/DELETE는 바디 무의미
+  function resolve(){ const ex=exists.checked, body=hasbody.checked;
+    if(method==='GET') return ex?{c:200,l:'OK',why:'있는 자원을 읽어 돌려줘요.'}:{c:404,l:'Not Found',why:'그 경로의 자원이 없어요(클라 탓).'};
+    if(method==='DELETE') return ex?{c:204,l:'No Content',why:'지웠고, 돌려줄 본문이 없어요.'}:{c:404,l:'Not Found',why:'지울 자원이 없어요.'};
+    if(method==='POST') return body?{c:201,l:'Created',why:'바디로 새 자원을 만들었어요.'}:{c:422,l:'Unprocessable',why:'만들 바디가 없어 검증 실패(→ CH03).'};
+    if(method==='PUT') return !body?{c:422,l:'Unprocessable',why:'바꿀 바디가 없어요.'}:ex?{c:200,l:'OK',why:'있는 자원을 바디로 통째 교체.'}:{c:201,l:'Created',why:'없으면 그 자리에 새로 만들어요(PUT은 upsert — 404로 두는 설계도 있어요).'};
+  }
+  function path(){ return method==='POST'?'/users' : '/users/1'; }
+  function render(sent){ let s=''; const r=resolve(); const bodyShown = usesBody() && hasbody.checked;
+    s+=A.reqCard(16,30,W-32,method,path(),{sub: usesBody()?(hasbody.checked?'body: { name, age }':'(바디 없음)'):'(GET·DELETE는 바디 없음)'});
+    s+=`<text x="16" y="108" fill="var(--muted)" font-size="10" font-family="monospace">상황: ${exists.checked?'자원 있음':'자원 없음'}${usesBody()?(hasbody.checked?' · 바디 있음':' · 바디 없음'):''}</text>`;
+    if(sent){ s+=`<line x1="${W/2}" y1="116" x2="${W/2}" y2="136" stroke="var(--line)" stroke-width="1.4"/>`;
+      s+=A.statusBadge(W/2,158,r.c,r.l);
+      s+=`<text x="${W/2}" y="190" fill="var(--muted)" font-size="10.5" font-family="monospace" text-anchor="middle">${r.why}</text>`;
+    } else s+=`<text x="${W/2}" y="160" fill="var(--faint)" font-size="11" font-family="monospace" text-anchor="middle">▶ 보내기를 누르면 서버가 답해요</text>`;
+    document.getElementById('s1').innerHTML=A.svg(W,H,s,'요청 만들어 보내기');
+    document.querySelectorAll('#mtoggle button').forEach(b=>{ const on=b.dataset.m===method; b.classList.toggle('on',on); b.style.background=on?(A.METHODC[method]):'var(--panel-2)'; b.style.color=on?'#0b0e14':'var(--muted)'; });
+    hasbody.disabled=!usesBody(); hasbody.parentElement.style.opacity=usesBody()?'1':'0.4';
+    document.getElementById('lab1').innerHTML = sent? `<b style="color:${A.statusColor(r.c)}">${r.c} ${r.l}</b> — ${r.why}` : '메서드·상황을 정하고 보내보세요.';
+  }
+  mt.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; method=b.dataset.m; render(false); });
+  exists.onchange=()=>render(false); hasbody.onchange=()=>render(false);
+  document.getElementById('send1').onclick=()=>render(true);
+  render(false);
+})();
+
+// ===== STEP 2: status code families =====
+(function(){ let sel=1;
+  const FAM=[
+    {k:'2xx 성공',c:'var(--good)',who:'정상',d:'요청이 잘 처리됐어요. 200 OK(읽기 성공)·201 Created(새로 만듦)·204 No Content(됐고 본문 없음).'},
+    {k:'3xx 리다이렉트',c:'var(--q)',who:'이동',d:'"다른 곳으로 가" — 주소가 바뀌었거나 캐시를 쓰라는 신호. 입문에선 자주 안 다뤄요.'},
+    {k:'4xx 클라 탓',c:'var(--hot)',who:'요청한 쪽 잘못',d:'보낸 요청이 잘못됐어요. 400(형식 오류)·401(인증 필요)·403(권한 없음)·404(없음)·422(검증 실패).'},
+    {k:'5xx 서버 탓',c:'var(--drop)',who:'서버 잘못',d:'서버가 처리 중 터졌어요. 500(내부 오류)·503(과부하). 내 코드의 버그·장애 신호 — 로그를 봐야 해요.'},
+  ];
+  const fam=document.getElementById('fam');
+  fam.innerHTML=FAM.map((f,i)=>`<button data-i="${i}" style="border-color:${f.c}">${f.k}</button>`).join('');
+  function render(){ const W=460,H=160; const f=FAM[sel]; let s='';
+    s+=`<rect x="14" y="14" width="${W-28}" height="${H-28}" rx="12" fill="var(--panel-2)" stroke="${f.c}"/>`;
+    s+=A.statusBadge(70,42,sel===0?200:sel===1?301:sel===2?404:500,'');
+    s+=`<text x="120" y="46" fill="${f.c}" font-size="15" font-family="monospace" font-weight="700">${f.k}</text>`;
+    s+=`<text x="${W-30}" y="46" fill="${f.c}" font-size="11" font-family="monospace" text-anchor="end">${f.who}</text>`;
+    s+=`<foreignObject x="32" y="58" width="${W-64}" height="92"><div xmlns="http://www.w3.org/1999/xhtml" style="font-family:monospace;font-size:12.5px;line-height:1.6;color:#cdd6f4">${f.d}</div></foreignObject>`;
+    document.getElementById('s2').innerHTML=A.svg(W,H,s,f.k);
+    document.querySelectorAll('#fam button').forEach((b,i)=>{ const on=i===sel; b.classList.toggle('on',on); b.style.background=on?FAM[i].c:'var(--panel-2)'; b.style.color=on?'#0b0e14':'var(--muted)'; });
+    document.getElementById('lab2').innerHTML='기억할 한 줄: <b style="color:var(--hot)">4xx = 보낸 쪽 탓</b>, <b style="color:var(--drop)">5xx = 서버 탓</b>.';
+  }
+  fam.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; sel=+b.dataset.i; render(); });
+  render();
+})();
+
+// ===== STEP 3: takeaways =====
+(function(){ const W=460,H=150;
+  let s=`<text x="${W/2}" y="24" fill="var(--good)" font-size="13" font-family="monospace" text-anchor="middle" font-weight="700">HTTP = 요청(편지) ↔ 응답(상태코드+데이터)</text>`;
+  const pts=[['메서드','GET·POST·PUT·DELETE'],['경로','어디에 (/users/1)'],['헤더·바디','부가정보·보낼 데이터'],['상태코드','한 줄 요약(2/4/5xx)']];
+  pts.forEach((p,i)=>{ const x=24+(i%2)*(W/2-8), y=44+Math.floor(i/2)*42; s+=`<rect x="${x}" y="${y}" width="${W/2-40}" height="34" rx="8" fill="var(--panel)" stroke="var(--good)" stroke-width="1.1"/><text x="${x+12}" y="${y+15}" fill="var(--ink)" font-size="12" font-family="monospace" font-weight="700">${p[0]}</text><text x="${x+12}" y="${y+28}" fill="var(--muted)" font-size="9.5" font-family="monospace">${p[1]}</text>`; });
+  document.getElementById('s3').innerHTML=A.svg(W,H,s,'정리');
+  document.getElementById('lab3').innerHTML=`서버는 "GET /users/1" 편지를 보고 <b>어느 핸들러로 보낼지</b> 어떻게 알까요? → 라우팅.`;
+})();
+</script>
+</body>
+</html>

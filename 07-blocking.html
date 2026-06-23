@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>07 · 루프를 막지 마라 — FastAPI, 눈으로 보기</title>
+<link rel="stylesheet" href="shared/theme.css">
+<link rel="icon" type="image/svg+xml" href="shared/favicon.svg">
+<style>
+  .scene{cursor:default;}
+  .big{font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--ink); margin:8px 2px 0;}
+  .ctl{display:flex; align-items:center; gap:10px; margin:10px 0; flex-wrap:wrap;}
+  svg{display:block; width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:12px;}
+  .toggles{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .toggles button{font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);cursor:pointer}
+  .toggles button.on{color:#0b0e14;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topnav" id="topnav"></div>
+
+  <header>
+    <div class="tag" style="color:var(--hot)">PART C · async와 이벤트 루프 — CH 07 · 핵심</div>
+    <h1>루프를 막지 마라</h1>
+    <p class="intro">이벤트 루프의 우아함엔 <b>치명적 약점</b>이 하나 있어요 — 일이 <code>await</code>로 <b>양보할 때만</b> 다음으로 넘어가요. 그런데 어떤 일이 <b>await 없이 CPU를 오래 붙잡으면</b>(무거운 계산, 또는 <b>동기 DB 드라이버</b> 같은 블로킹 호출), 루프는 양보 신호를 못 받아 <b>그 자리에 얼어붙어요</b>. 그러면 그동안 <b>다른 모든 요청이 멈춰요</b> — 그 요청들은 잘못이 없는데도요. 이게 FastAPI <b>1순위 실수</b>예요. 함정의 핵심은 <code>async def</code> 안에서 <b>동기 블로킹 호출</b>을 하는 거예요(예: 비동기 드라이버 대신 동기 드라이버, <code>time.sleep</code>, 무거운 반복문). 해법은 둘 — <b>진짜 비동기 라이브러리를 await</b>하거나, 동기 작업이라면 <b>핸들러를 그냥 <code>def</code>로</b> 두는 거예요(그러면 FastAPI가 알아서 <b>별도 스레드풀</b>로 빼서 루프를 안 막아요). 그래서 — <b>"async = 빠름"이 아니에요.</b> 잘못 쓴 async가 오히려 가장 느려요.</p>
+  </header>
+
+  <nav class="stepper" id="stepper">
+    <button data-s="0" class="active">00 · 얼어붙는 루프</button>
+    <button data-s="1">01 · 세 가지 방식</button>
+    <button data-s="2">02 · 규칙 한 문장</button>
+    <button data-s="3">03 · 정리</button>
+  </nav>
+
+  <!-- STEP 0 -->
+  <section class="panel show" data-panel="0">
+    <span class="kicker" style="color:var(--hot)">Step 00 — The Loop Freezes</span>
+    <h2>한 요청의 블로킹이 모두를 멈춘다</h2>
+    <p class="lead">요청 3개가 들어왔는데, <b>R1이 <code>async def</code> 안에서 동기 블로킹 호출</b>(양보 없는 무거운 일)을 해요. ▶로 재생하면 — R1이 CPU를 붙잡은 <b>빨간 구간</b> 동안 루프가 <b>얼어붙어</b>, 죄 없는 R2·R3가 <b>시작도 못 하고</b> 기다려요. 블로킹이 끝나야 비로소 다음으로 넘어가죠.</p>
+    <div class="ctl"><button class="btn play" id="go0">▶ 재생</button> <button class="btn" id="rst0">↺ 리셋</button></div>
+    <div class="scene" id="s0"></div>
+    <p class="big" id="lab0"></p>
+    <p class="note" style="margin-top:6px">→ <b style="color:var(--drop)">빨간 막대</b> = 양보 없이 CPU를 붙잡은 블로킹. 이 동안 이벤트 루프는 아무 일도 못 해요.</p>
+  </section>
+
+  <!-- STEP 1 -->
+  <section class="panel" data-panel="1">
+    <span class="kicker" style="color:var(--q)">Step 01 — Three Ways</span>
+    <h2>같은 느린 작업, 세 가지 방식</h2>
+    <p class="lead">R1이 1초짜리 작업을 하는데, 방식을 바꿔 비교하세요. <b>① async+await</b>(진짜 비동기 I/O): 기다리며 양보 → R2·R3 멀쩡. <b>② async+블로킹</b>(동기 호출을 async 안에서): 루프 얼어붙음 → 전부 지연(최악!). <b>③ def 핸들러</b>: FastAPI가 <b>별도 스레드풀</b>로 빼줘서 루프는 자유 → R2·R3 멀쩡. ①과 ③은 좋고, ②만 나빠요.</p>
+    <div class="toggles" id="md"></div>
+    <div class="ctl"><button class="btn play" id="go1">▶ 재생</button></div>
+    <div class="scene" id="s1"></div>
+    <p class="big" id="lab1"></p>
+    <p class="note" style="margin-top:6px">→ 핵심 반전: <b>잘 모를 땐 <code>def</code>가 더 안전</b>해요(FastAPI가 스레드풀로 빼주니까). 어설픈 <code>async def</code>+블로킹이 가장 위험.</p>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="panel" data-panel="2">
+    <span class="kicker" style="color:var(--v)">Step 02 — The One Rule</span>
+    <h2>규칙 한 문장 — 그리고 "async ≠ 빠름"</h2>
+    <p class="lead">각 상황을 눌러 무엇을 써야 하는지 보세요. 외울 한 문장: <b>"<code>async def</code>면 안에서 <code>await</code>만 — 동기 블로킹 작업이면 그냥 <code>def</code>로 둬라(FastAPI가 스레드풀로 빼준다)."</b> 그리고 <b>async는 빠름의 동의어가 아니에요</b> — 기다림을 메우는 도구일 뿐, 잘못 쓰면 가장 느려요. 무거운 CPU 계산은 async로도 안 빨라지고(병렬 아님), 오히려 루프를 막죠.</p>
+    <div class="toggles" id="sit"></div>
+    <div class="scene" id="s2"></div>
+    <p class="big" id="lab2"></p>
+    <p class="note" style="margin-top:6px">→ 참고: 스레드풀도 <b>수가 한정</b>돼 있어요(기본 수십 개). <code>def</code> 핸들러가 폭주하면 그 한계에 부딪혀요 — 만능은 아니에요.</p>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="panel" data-panel="3">
+    <span class="kicker" style="color:var(--good)">Step 03 — Takeaways</span>
+    <h2>정리 — 루프를 막지 마라</h2>
+    <p class="lead"><code>async def</code> 안의 <b>동기 블로킹</b>은 이벤트 루프를 얼려 <b>모든 요청을 멈춰요</b> — FastAPI 1순위 실수. 해법: <b>진짜 비동기 라이브러리를 await</b>하거나, 동기 작업이면 <b>핸들러를 def로</b>(스레드풀행). "async = 빠름"은 미신이에요. 자, 그럼 제대로 쓴 비동기 서버는 한 루프로 <b>얼마나 많은 요청</b>을 받아낼까요? 그리고 "응답 후에 도는" 백그라운드 작업의 정체는? 다음 챕터예요.</p>
+    <div class="scene" id="s3"></div>
+    <p class="big" id="lab3"></p>
+    <p class="note" style="margin-top:14px">→ 다음 → <a href="08-concurrency.html" style="color:var(--q);font-weight:700">CH 08 · 동시 요청과 백그라운드</a></p>
+  </section>
+
+  <p class="foot">// 코드 없는 직관 입문 · <a href="index.html">목차</a></p>
+</div>
+
+<script src="shared/lib.js"></script>
+<script src="shared/lib-api.js"></script>
+<script>
+VZ.mountTopnav('#topnav', '07 · 블로킹');
+VZ.setupStepper();
+const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
+const REQC=['var(--q)','var(--v)','var(--pink)'];
+
+// 시나리오 빌더: mode 0 async+await, 1 async+blocking, 2 def(threadpool)
+function build(mode){ const cpu=[], wait=[], thread=[];
+  if(mode===1){ // 블로킹: R1이 0.2~1.2 CPU 점유(block), R2/R3는 1.2 이후에야
+    cpu.push({lane:'이벤트 루프',t0:0,dur:0.2,label:'R1',kind:'run',color:REQC[0]});
+    cpu.push({lane:'이벤트 루프',t0:0.2,dur:1.0,label:'R1 블로킹(양보 없음)',kind:'block'});
+    cpu.push({lane:'이벤트 루프',t0:1.2,dur:0.2,label:'R2',kind:'run',color:REQC[1]});
+    wait.push({lane:'R2',t0:1.4,dur:0.4,label:'대기',kind:'wait'});
+    cpu.push({lane:'이벤트 루프',t0:1.4,dur:0.2,label:'R3',kind:'run',color:REQC[2]});
+    wait.push({lane:'R3',t0:1.6,dur:0.4,label:'대기',kind:'wait'});
+    cpu.push({lane:'이벤트 루프',t0:1.8,dur:0.2,label:'R2',kind:'run',color:REQC[1]});
+    cpu.push({lane:'이벤트 루프',t0:2.0,dur:0.2,label:'R3',kind:'run',color:REQC[2]});
+    return {cpu,wait,thread,total:2.2,lanes:['이벤트 루프','R2','R3']};
+  } else if(mode===0){ // async+await: R1도 양보
+    cpu.push({lane:'이벤트 루프',t0:0,dur:0.2,label:'R1',kind:'run',color:REQC[0]});
+    wait.push({lane:'R1',t0:0.2,dur:1.0,label:'await(비동기 I/O)',kind:'wait'});
+    cpu.push({lane:'이벤트 루프',t0:1.2,dur:0.2,label:'R1',kind:'run',color:REQC[0]});
+    cpu.push({lane:'이벤트 루프',t0:0.2,dur:0.2,label:'R2',kind:'run',color:REQC[1]});
+    wait.push({lane:'R2',t0:0.4,dur:0.4,label:'대기',kind:'wait'});
+    cpu.push({lane:'이벤트 루프',t0:0.8,dur:0.2,label:'R2',kind:'run',color:REQC[1]});
+    cpu.push({lane:'이벤트 루프',t0:0.4,dur:0.2,label:'R3',kind:'run',color:REQC[2]});
+    wait.push({lane:'R3',t0:0.6,dur:0.4,label:'대기',kind:'wait'});
+    cpu.push({lane:'이벤트 루프',t0:1.0,dur:0.2,label:'R3',kind:'run',color:REQC[2]});
+    return {cpu,wait,thread,total:1.4,lanes:['이벤트 루프','R1','R2','R3']};
+  } else { // def: R1은 스레드풀, 루프 자유
+    thread.push({lane:'스레드풀',t0:0.05,dur:1.0,label:'R1 (별도 스레드)',kind:'run',color:REQC[0]});
+    cpu.push({lane:'이벤트 루프',t0:0.2,dur:0.2,label:'R2',kind:'run',color:REQC[1]});
+    wait.push({lane:'R2',t0:0.4,dur:0.4,label:'대기',kind:'wait'});
+    cpu.push({lane:'이벤트 루프',t0:0.8,dur:0.2,label:'R2',kind:'run',color:REQC[1]});
+    cpu.push({lane:'이벤트 루프',t0:0.4,dur:0.2,label:'R3',kind:'run',color:REQC[2]});
+    wait.push({lane:'R3',t0:0.6,dur:0.4,label:'대기',kind:'wait'});
+    cpu.push({lane:'이벤트 루프',t0:1.0,dur:0.2,label:'R3',kind:'run',color:REQC[2]});
+    return {cpu,wait,thread,total:1.2,lanes:['이벤트 루프','스레드풀','R2','R3']};
+  }
+}
+
+// ===== STEP 0: freeze =====
+(function(){ const W=460,H=170; let cancel=null; const sc=build(1);
+  function render(p){ const now=p*sc.total; const all=sc.cpu.concat(sc.wait);
+    const vis=all.filter(t=>t.t0<now+0.001).map(t=>({...t,dur:Math.min(t.dur,now-t.t0)}));
+    let s=A.loop(W,H,sc.lanes,vis,sc.total,{playhead:now,tick:0.5,padL:84});
+    // 얼어붙음 표시
+    const frozen = now>=0.2 && now<1.2;
+    if(frozen) s+=`<text x="${W-14}" y="13" fill="var(--drop)" font-size="11" font-family="monospace" text-anchor="end" font-weight="700">🧊 루프 얼어붙음 — R2·R3 멈춤</text>`;
+    document.getElementById('s0').innerHTML=A.svg(W,H,s,'얼어붙는 루프');
+    document.getElementById('lab0').innerHTML = now<0.2?'R1 시작.': now<1.2?'<b style="color:var(--drop)">R1이 CPU를 붙잡고 양보 안 함</b> — 루프 얼어붙어 R2·R3는 시작도 못 해요.':'블로킹 끝 → 이제야 R2·R3 처리. 1초를 통째로 날렸어요.';
+  }
+  document.getElementById('go0').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),3000,()=>render(1)); };
+  document.getElementById('rst0').onclick=()=>{ if(cancel)cancel(); render(0); };
+  render(0);
+})();
+
+// ===== STEP 1: three ways =====
+(function(){ let mode=0, cancel=null; const W=460;
+  const MODES=[{k:'① async + await',c:'var(--good)'},{k:'② async + 블로킹',c:'var(--drop)'},{k:'③ def (스레드풀)',c:'var(--good)'}];
+  const md=document.getElementById('md'); md.innerHTML=MODES.map((m,i)=>`<button data-i="${i}">${m.k}</button>`).join('');
+  function render(p){ const sc=build(mode); const H=40+sc.lanes.length*30; const now=p*Math.max(sc.total,0.01);
+    const all=sc.cpu.concat(sc.wait,sc.thread);
+    const vis=all.filter(t=>t.t0<now+0.001).map(t=>({...t,dur:Math.min(t.dur,now-t.t0)}));
+    let s=A.loop(W,H,sc.lanes,vis,2.2,{playhead:now,tick:0.5,padL:84});
+    s+=`<text x="${W-14}" y="13" fill="${MODES[mode].c}" font-size="11" font-family="monospace" text-anchor="end" font-weight="700">총 ${sc.total.toFixed(1)}s</text>`;
+    document.getElementById('s1').innerHTML=A.svg(W,H,s,MODES[mode].k);
+    document.querySelectorAll('#md button').forEach((b,i)=>{ const on=i===mode; b.classList.toggle('on',on); b.style.background=on?MODES[i].c:'var(--panel-2)'; b.style.color=on?(i===1?'#fff':'#0b0e14'):'var(--muted)'; });
+    document.getElementById('lab1').innerHTML = mode===0?'<b style="color:var(--good)">① async+await</b>: R1이 기다리며 양보 → R2·R3 멀쩡. 총 1.4s. 👍': mode===1?'<b style="color:var(--drop)">② async+블로킹</b>: 루프 얼어붙어 전부 지연. 총 2.2s. 최악! 👎':'<b style="color:var(--good)">③ def</b>: FastAPI가 R1을 스레드풀로 빼 루프는 자유 → R2·R3 멀쩡. 총 1.2s. 👍';
+  }
+  md.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; mode=+b.dataset.i; if(cancel)cancel(); render(1); });
+  document.getElementById('go1').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),2800,()=>render(1)); };
+  render(1);
+})();
+
+// ===== STEP 2: the rule =====
+(function(){ let sel=0;
+  const SIT=[
+    {k:'비동기 DB 드라이버 호출',ans:'async def + await',c:'var(--good)',d:'진짜 비동기 라이브러리(asyncpg 등)는 await로 양보해요 — 이상적. 루프가 그 틈에 다른 요청을 처리.'},
+    {k:'동기 DB 드라이버만 있음',ans:'def 핸들러',c:'var(--good)',d:'동기 드라이버(psycopg2 등)를 async def 안에서 부르면 루프가 얼어요. 핸들러를 def로 두면 FastAPI가 스레드풀로 빼줘 안전.'},
+    {k:'무거운 CPU 계산(이미지·암호화)',ans:'def + (별도 프로세스)',c:'var(--hot)',d:'CPU 일은 async로도 안 빨라져요(병렬 아님). def로 스레드풀에 빼되, 정말 무거우면 별도 프로세스/작업큐로. async def에 넣으면 루프 정지.'},
+    {k:'"async 쓰면 빨라지겠지"',ans:'미신!',c:'var(--drop)',d:'async는 "기다림을 메우는" 도구지 빠름의 동의어가 아니에요. 기다림이 없으면 이득 없고, 블로킹을 async에 넣으면 오히려 최악.'},
+  ];
+  const sit=document.getElementById('sit'); sit.innerHTML=SIT.map((x,i)=>`<button data-i="${i}">${x.k}</button>`).join('');
+  function render(){ const W=460,H=160; const x=SIT[sel]; let s='';
+    s+=`<rect x="14" y="14" width="${W-28}" height="${H-28}" rx="12" fill="var(--panel-2)" stroke="${x.c}"/>`;
+    s+=`<text x="32" y="44" fill="${x.c}" font-size="13.5" font-family="monospace" font-weight="700">${x.k}</text>`;
+    s+=`<text x="${W-30}" y="44" fill="${x.c}" font-size="11.5" font-family="monospace" text-anchor="end">→ ${x.ans}</text>`;
+    s+=`<foreignObject x="32" y="58" width="${W-64}" height="92"><div xmlns="http://www.w3.org/1999/xhtml" style="font-family:monospace;font-size:12px;line-height:1.55;color:#cdd6f4">${x.d}</div></foreignObject>`;
+    document.getElementById('s2').innerHTML=A.svg(W,H,s,x.k);
+    document.querySelectorAll('#sit button').forEach((b,i)=>{ const on=i===sel; b.classList.toggle('on',on); b.style.background=on?SIT[i].c:'var(--panel-2)'; b.style.color=on?(i===3?'#fff':'#0b0e14'):'var(--muted)'; });
+    document.getElementById('lab2').innerHTML='한 문장: <b>async def면 await만, 동기 블로킹이면 def로</b>. async≠빠름.';
+  }
+  sit.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; sel=+b.dataset.i; render(); });
+  render();
+})();
+
+// ===== STEP 3: takeaways =====
+(function(){ const W=460,H=140;
+  let s=`<text x="${W/2}" y="24" fill="var(--good)" font-size="12.5" font-family="monospace" text-anchor="middle" font-weight="700">async def면 await만 · 동기 블로킹은 def로</text>`;
+  const rows=[['1순위 실수','async def 안 동기 블로킹 → 루프 정지','var(--drop)'],['해법 A','진짜 비동기 라이브러리 await','var(--good)'],['해법 B','동기면 def → 스레드풀행','var(--good)'],['미신','async = 빠름 (아님)','var(--hot)']];
+  rows.forEach((r,i)=>{ const y=36+i*26; s+=`<rect x="24" y="${y}" width="${W-48}" height="22" rx="6" fill="var(--panel)" stroke="${r[2]}" stroke-width="1"/><text x="38" y="${y+15}" fill="${r[2]}" font-size="11" font-family="monospace" font-weight="700">${r[0]}</text><text x="${W-38}" y="${y+15}" fill="var(--ink)" font-size="10" font-family="monospace" text-anchor="end">${r[1]}</text>`; });
+  document.getElementById('s3').innerHTML=A.svg(W,H,s,'정리');
+  document.getElementById('lab3').innerHTML=`제대로 쓴 async는 한 루프로 <b>수천 요청</b>을 받아내요 → 다음 챕터.`;
+})();
+</script>
+</body>
+</html>

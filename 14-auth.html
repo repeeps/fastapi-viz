@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>14 · 인증 (JWT) — FastAPI, 눈으로 보기</title>
+<link rel="stylesheet" href="shared/theme.css">
+<link rel="icon" type="image/svg+xml" href="shared/favicon.svg">
+<style>
+  .scene{cursor:default;}
+  .big{font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--ink); margin:8px 2px 0;}
+  .ctl{display:flex; align-items:center; gap:10px; margin:10px 0; flex-wrap:wrap;}
+  svg{display:block; width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:12px;}
+  .toggles{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .toggles button{font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);cursor:pointer}
+  .toggles button.on{color:#0b0e14;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topnav" id="topnav"></div>
+
+  <header>
+    <div class="tag" style="color:var(--good)">PART E · 바깥 세계 — CH 14</div>
+    <h1>인증 (JWT)</h1>
+    <p class="intro">서버는 매 요청마다 <b>"이 요청을 보낸 게 정말 그 사람인가"</b>를 확인해야 해요. 매번 아이디·비밀번호를 보낼 순 없으니, 흐름은 이래요 — ① 한 번 <b>로그인</b>(아이디·비밀번호)하면 서버가 확인 후 <b>토큰</b>(출입증)을 발급하고, ② 이후엔 요청마다 그 <b>토큰만 첨부</b>하면, ③ 서버가 토큰을 <b>검증</b>해 통과시켜요. 가장 흔한 토큰이 <b>JWT</b>예요. JWT는 세 조각(<b>헤더.페이로드.서명</b>)으로 되어 있는데, 결정적으로 — <b>JWT는 암호화가 아니라 "서명"이에요.</b> 페이로드(누구인지 등)는 <b>누구나 읽을 수 있어요</b>(잠긴 게 아님). 서명은 "내용이 위조되지 않았음"을 보장할 뿐이죠. 그래서 <b>토큰에 비밀번호 같은 비밀을 담으면 안 돼요</b>. 검증도 깔끔해요 — 서버는 토큰을 따로 저장 안 하고, <b>서명만 확인</b>(stateless)하면 끝이에요. (FastAPI의 <code>OAuth2PasswordBearer</code>는 이 password 방식 하나고, OAuth2엔 다른 흐름도 있어요.)</p>
+  </header>
+
+  <nav class="stepper" id="stepper">
+    <button data-s="0" class="active">00 · 로그인→토큰→검증</button>
+    <button data-s="1">01 · 토큰의 속</button>
+    <button data-s="2">02 · 위조하면 들킨다</button>
+    <button data-s="3">03 · 정리</button>
+  </nav>
+
+  <!-- STEP 0 -->
+  <section class="panel show" data-panel="0">
+    <span class="kicker" style="color:var(--hot)">Step 00 — Login → Token → Verify</span>
+    <h2>한 번 로그인, 이후엔 출입증만</h2>
+    <p class="lead">▶를 누르면 인증 흐름이 흘러요 — ① 클라이언트가 <b>로그인</b>(아이디·비번)하면 서버가 확인 후 <b>토큰을 발급</b>해요. ② 이후 요청마다 클라이언트는 <b>토큰을 첨부</b>하고, ③ 서버는 <b>서명만 검증</b>해 통과시켜요(DB 조회도, 토큰 저장도 없이). 비번은 <b>처음 한 번만</b> 오가요.</p>
+    <div class="ctl"><button class="btn play" id="go0">▶ 인증 흐름</button> <button class="btn" id="rst0">↺ 리셋</button></div>
+    <div class="scene" id="s0"></div>
+    <p class="big" id="lab0"></p>
+    <p class="note" style="margin-top:6px">→ 서버가 토큰을 저장하지 않는 게 <b>stateless</b>의 장점(확장 쉬움). 단점은 발급한 토큰을 <b>즉시 무효화하기 어렵다</b>는 것.</p>
+  </section>
+
+  <!-- STEP 1 -->
+  <section class="panel" data-panel="1">
+    <span class="kicker" style="color:var(--q)">Step 01 — Inside the Token</span>
+    <h2>토큰의 속 — 페이로드는 공개다</h2>
+    <p class="lead">JWT는 <b>헤더.페이로드.서명</b> 세 조각이에요. <b>페이로드 열어보기</b>를 눌러보세요 — 사용자 id·만료시각 같은 내용이 <b>그대로 읽혀요</b>. 암호화된 게 아니라 <b>단순 인코딩</b>이라 누구나 디코드하죠. 그러니 <b>비밀번호·민감정보는 절대 넣지 마세요</b>. 서명은 내용을 <b>숨기는</b> 게 아니라 <b>위조를 막는</b> 도장일 뿐이에요.</p>
+    <div class="toggles" id="dec"></div>
+    <div class="scene" id="s1"></div>
+    <p class="big" id="lab1"></p>
+    <p class="note" style="margin-top:6px">→ "JWT는 암호화다"는 흔한 오해예요. 정확히는 <b>서명(무결성)</b>이지 <b>암호화(기밀성)</b>가 아니에요.</p>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="panel" data-panel="2">
+    <span class="kicker" style="color:var(--v)">Step 02 — Tampering Is Caught</span>
+    <h2>내용을 위조하면 — 서명이 안 맞아 들킨다</h2>
+    <p class="lead">"내가 관리자라고 페이로드를 고치면?" 토글해 보세요. 페이로드를 바꾸면 원래 <b>서명과 안 맞아요</b> — 서버는 서명을 다시 계산해 비교하고, 다르면 <b>401(거부)</b>이에요. 서명은 서버만 아는 <b>비밀 키</b>로 만들어지니, 키 없이는 유효한 서명을 못 만들죠. 보호가 필요한 라우트는 <b>의존성(Depends)</b>으로 이 검증을 끼워넣어요(9장의 DI!).</p>
+    <div class="toggles" id="tp"></div>
+    <div class="scene" id="s2"></div>
+    <p class="big" id="lab2"></p>
+    <p class="note" style="margin-top:6px">→ 라우트 보호 = <code>Depends(get_current_user)</code> 한 줄. 의존성이 토큰을 검증하고 통과해야 핸들러가 돌아요(9·14장이 만나는 곳).</p>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="panel" data-panel="3">
+    <span class="kicker" style="color:var(--good)">Step 03 — Takeaways</span>
+    <h2>정리 — 인증</h2>
+    <p class="lead">인증은 <b>한 번 로그인 → 토큰 발급 → 매 요청 토큰 검증</b>의 흐름이에요. JWT는 <b>헤더.페이로드.서명</b>이고, <b>서명(위조 방지)이지 암호화(내용 숨김)가 아니에요</b> — 페이로드는 공개니 비밀을 넣지 마세요. 서버는 서명만 확인(stateless)하고, 보호 라우트는 의존성으로 검증을 끼워넣죠. 여기까지가 바깥 세계예요. 마지막 PART에선 요청을 감싸는 <b>미들웨어</b>와, 서버를 실제로 띄우는 <b>배포·워커</b>로 마무리해요.</p>
+    <div class="scene" id="s3"></div>
+    <p class="big" id="lab3"></p>
+    <p class="note" style="margin-top:14px">→ 다음 → <a href="15-middleware.html" style="color:var(--q);font-weight:700">CH 15 · 미들웨어·에러 처리</a></p>
+  </section>
+
+  <p class="foot">// 코드 없는 직관 입문 · <a href="index.html">목차</a></p>
+</div>
+
+<script src="shared/lib.js"></script>
+<script src="shared/lib-api.js"></script>
+<script>
+VZ.mountTopnav('#topnav', '14 · 인증');
+VZ.setupStepper();
+const A=VZ.API, fmt=VZ.fmt, clamp=VZ.clamp;
+
+// ===== STEP 0: login → token → verify (sequence) =====
+(function(){ const W=460,H=220; let cancel=null;
+  const LL=[{x:90,label:'클라이언트',color:'var(--q)'},{x:360,label:'서버',color:'var(--v)'}];
+  const msgs=[{from:0,to:1,y:54,label:'로그인 (id·비번)',kind:'req'},
+    {from:1,to:0,y:92,label:'토큰 발급',kind:'tok'},
+    {from:0,to:1,y:140,label:'요청 + 토큰',kind:'req'},
+    {from:1,to:0,y:190,label:'200 (서명 검증 OK)',kind:'resp'}];
+  function render(p){ const upto=46+p*160; let s=A.sequence(W,H,LL,msgs,{upto});
+    // 서버 검증 표시
+    if(upto>140){ s+=`<text x="360" y="166" fill="var(--good)" font-size="9" font-family="monospace" text-anchor="middle">서명 확인(저장X)</text>`; }
+    document.getElementById('s0').innerHTML=A.svg(W,H,s,'인증 흐름');
+    const seen=msgs.filter(m=>m.y<=upto).length;
+    document.getElementById('lab0').innerHTML = seen<=1?'① 로그인 — id·비번을 (처음 한 번) 보내요.': seen===2?'② 서버가 확인 후 <b style="color:var(--hot)">토큰(출입증)</b>을 발급.': seen===3?'③ 이후 요청마다 <b>토큰만</b> 첨부.':'서버가 <b style="color:var(--good)">서명만 검증</b>(DB·저장 없이) → 통과!';
+  }
+  document.getElementById('go0').onclick=()=>{ if(cancel)cancel(); cancel=VZ.LA.tween(p=>render(p),3000,()=>render(1)); };
+  document.getElementById('rst0').onclick=()=>{ if(cancel)cancel(); render(0); };
+  render(0);
+})();
+
+// ===== STEP 1: inside the token =====
+(function(){ const W=460,H=200; let decoded=false;
+  const dec=document.getElementById('dec'); dec.innerHTML=`<button data-d="0">인코딩된 토큰</button><button data-d="1">페이로드 열어보기</button>`;
+  function render(){ let s='';
+    s+=A.jwt(20,30,{w:120});
+    if(!decoded){ s+=`<text x="20" y="100" fill="var(--muted)" font-size="10.5" font-family="monospace">eyJhbGc...  .  eyJzdWIi...  .  SflKxw...</text>`;
+      s+=`<text x="20" y="130" fill="var(--faint)" font-size="10" font-family="monospace">↑ 암호처럼 보이지만 그냥 인코딩(누구나 디코드)</text>`;
+    } else { s+=`<rect x="20" y="92" width="${W-40}" height="90" rx="8" fill="#0a0d13" stroke="var(--hot)" stroke-width="1.4"/>`;
+      s+=`<text x="34" y="112" fill="var(--muted)" font-size="10" font-family="monospace">페이로드 디코드 결과(평문!):</text>`;
+      s+=`<text x="34" y="132" fill="var(--ink)" font-size="11" font-family="monospace">{ "sub": "user_42", "exp": 1699999999,</text>`;
+      s+=`<text x="34" y="150" fill="var(--ink)" font-size="11" font-family="monospace">  "role": "user" }</text>`;
+      s+=`<text x="34" y="172" fill="var(--drop)" font-size="10" font-family="monospace">⚠ 누구나 읽음 — 비밀번호·비밀 절대 금지!</text>`;
+    }
+    document.getElementById('s1').innerHTML=A.svg(W,H,s,'토큰의 속');
+    document.querySelectorAll('#dec button').forEach(b=>{ const on=(b.dataset.d==='1')===decoded; b.classList.toggle('on',on); b.style.background=on?(decoded?'var(--hot)':'var(--q)'):'var(--panel-2)'; b.style.color=on?'#0b0e14':'var(--muted)'; });
+    document.getElementById('lab1').innerHTML = decoded? '<b style="color:var(--drop)">페이로드는 평문</b> — id·역할·만료가 그대로 보여요. 서명은 "숨김"이 아니라 "위조 방지".' : '세 조각: 헤더.페이로드.서명. "열어보기"를 눌러 페이로드가 읽히는지 보세요.';
+  }
+  dec.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; decoded=b.dataset.d==='1'; render(); });
+  render();
+})();
+
+// ===== STEP 2: tampering caught =====
+(function(){ const W=460,H=200; let tampered=false;
+  const tp=document.getElementById('tp'); tp.innerHTML=`<button data-t="0">정상 토큰</button><button data-t="1">페이로드 위조 (role→admin)</button>`;
+  function render(){ let s=''; const ok=!tampered;
+    // 페이로드 + 서명
+    s+=`<rect x="20" y="24" width="${W-40}" height="40" rx="8" fill="var(--panel)" stroke="${tampered?'var(--drop)':'var(--hot)'}" stroke-width="1.4"/>`;
+    s+=`<text x="34" y="40" fill="var(--muted)" font-size="9.5" font-family="monospace">페이로드</text>`;
+    s+=`<text x="34" y="56" fill="${tampered?'var(--drop)':'var(--ink)'}" font-size="11" font-family="monospace">{ "sub":"user_42", "role":"${tampered?'admin ← 위조!':'user'}" }</text>`;
+    // 서버 검증
+    s+=`<text x="20" y="92" fill="var(--muted)" font-size="10" font-family="monospace">서버: 비밀 키로 서명 다시 계산 → 토큰의 서명과 비교</text>`;
+    const calcSig = ok?'a1b2c3':'7f3a9e';  // 위조 페이로드로 다시 계산하면 다른 서명
+    s+=`<rect x="20" y="104" width="200" height="30" rx="6" fill="var(--panel)" stroke="var(--v)"/><text x="120" y="124" fill="var(--v)" font-size="10" font-family="monospace" text-anchor="middle">계산한 서명: ${calcSig}</text>`;
+    s+=`<rect x="240" y="104" width="200" height="30" rx="6" fill="var(--panel)" stroke="${ok?'var(--good)':'var(--drop)'}"/><text x="340" y="124" fill="${ok?'var(--good)':'var(--drop)'}" font-size="10" font-family="monospace" text-anchor="middle">토큰 서명: a1b2c3 ${ok?'=':'≠'}</text>`;
+    // 결과
+    if(ok){ s+=A.statusBadge(W/2,166,200,'통과'); }
+    else { s+=A.statusBadge(W/2,166,401,'Unauthorized'); s+=`<text x="${W/2}" y="190" fill="var(--drop)" font-size="10" font-family="monospace" text-anchor="middle">서명 불일치 — 위조 발각, 거부</text>`; }
+    document.getElementById('s2').innerHTML=A.svg(W,H,s,tampered?'위조':'정상');
+    document.querySelectorAll('#tp button').forEach(b=>{ const on=(b.dataset.t==='1')===tampered; b.classList.toggle('on',on); b.style.background=on?(tampered?'var(--drop)':'var(--good)'):'var(--panel-2)'; b.style.color=on?(tampered?'#fff':'#0b0e14'):'var(--muted)'; });
+    document.getElementById('lab2').innerHTML = ok? '<b style="color:var(--good)">정상</b>: 계산한 서명 = 토큰 서명 → 통과. 내용이 안 바뀌었어요.' : '<b style="color:var(--drop)">위조</b>: 페이로드를 고쳤지만 서명은 옛 내용 기준 — <b>다시 계산하면 안 맞아</b> 401. 비밀 키 없이는 위조 불가!';
+  }
+  tp.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; tampered=b.dataset.t==='1'; render(); });
+  render();
+})();
+
+// ===== STEP 3: takeaways =====
+(function(){ const W=460,H=140;
+  let s=`<text x="${W/2}" y="24" fill="var(--good)" font-size="13" font-family="monospace" text-anchor="middle" font-weight="700">로그인 → 토큰 → 매 요청 서명 검증</text>`;
+  const rows=[['JWT','헤더.페이로드.서명','var(--q)'],['핵심','서명(위조방지)이지 암호화 아님','var(--drop)'],['보호','Depends로 검증 끼워넣기','var(--good)']];
+  rows.forEach((r,i)=>{ const y=38+i*32; s+=`<rect x="24" y="${y}" width="${W-48}" height="26" rx="7" fill="var(--panel)" stroke="${r[2]}" stroke-width="1.1"/><text x="40" y="${y+17}" fill="${r[2]}" font-size="11" font-family="monospace" font-weight="700">${r[0]}</text><text x="${W-40}" y="${y+17}" fill="var(--ink)" font-size="10" font-family="monospace" text-anchor="end">${r[1]}</text>`; });
+  document.getElementById('s3').innerHTML=A.svg(W,H,s,'정리');
+  document.getElementById('lab3').innerHTML=`바깥 세계 끝 — 요청을 감싸는 <b style="color:var(--pink)">미들웨어</b>와 <b>배포</b>로 마무리.`;
+})();
+</script>
+</body>
+</html>
